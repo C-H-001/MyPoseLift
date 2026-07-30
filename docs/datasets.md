@@ -16,6 +16,11 @@ python tools/download_datasets.py --dataset coco-wholebody --root data/raw --wit
 python tools/prepare_coco_wholebody.py --annotations data/raw/coco-wholebody/annotations/coco_wholebody_train_v1.0.json --out data/processed/coco_wholebody_train.npz
 ```
 
+The preparation command converts the official annotation JSON into the
+project's cached 133-keypoint representation. Keep downloaded images,
+annotations, and generated caches under `data/`; dataset files are not part of
+the repository.
+
 The default COCO annotation source actively runs the official OpenDataLab/OpenXLab command:
 
 ```bash
@@ -47,6 +52,7 @@ Commands:
 
 ```bash
 python tools/download_datasets.py --dataset h3wb --root data/raw
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --out data/processed/h3wb_2dto3d_train.npz
 ```
 
-The downloader verifies both expected JSON files and prints the official Google Drive link when either is missing. H3WB preparation is introduced by Task 5; `tools/prepare_h3wb.py` is not part of Task 4.
+The downloader verifies both expected JSON files and prints the official Google Drive link when either is missing. The preparation command creates the cache consumed by the training configurations in `configs/`.
