@@ -44,3 +44,21 @@ DONE_WITH_CONCERNS
 - Offline smoke test for `download_coco_wholebody(..., no_verify=True)`: passed; created the annotation directory and printed official anchors.
 - `git diff --check`: passed.
 - `pytest -v`: still blocked during collection by PyTorch `WinError 1114` loading `E:\Anaconda\Lib\site-packages\torch\lib\c10.dll`; no Task 4 test failure was reached.
+
+## Review Fix Round 2
+
+### Finding addressed
+
+COCO-WholeBody now has an active OpenXLab/OpenDataLab annotation path. The CLI defaults to `--annotation-source openxlab` for COCO and runs:
+
+`openxlab dataset get --dataset-repo OpenDataLab/COCO-WholeBody --target-path <root>`
+
+The implementation checks for the executable, verifies both downloaded COCO JSON files and their top-level `images` and `annotations` lists, and raises a setup error containing `pip install openxlab`, `openxlab login`, and the exact command when the CLI is missing. `--annotation-source manual` remains available for OneDrive, Google Drive, BaiduPan, and manual OpenXLab downloads. H3WB remains explicit manual verification.
+
+### Additional verification
+
+- `pytest tests/test_coco_wholebody.py -v`: 7 passed, including OpenXLab command construction and missing-CLI error tests without network access.
+- `pytest tests/test_keypoints133.py tests/test_transforms_validation.py tests/test_camera.py tests/test_coco_wholebody.py -v`: 24 passed.
+- `python tools/download_datasets.py --help`: passed; displayed `--annotation-source {openxlab,manual}`.
+- `git diff --check`: passed.
+- `pytest -v`: blocked during collection by the environment’s PyTorch `WinError 1114` loading `E:\Anaconda\Lib\site-packages\torch\lib\c10.dll`.

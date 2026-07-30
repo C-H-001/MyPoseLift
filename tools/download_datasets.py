@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import argparse
+import json
 from pathlib import Path
+import shutil
+import subprocess
 from urllib.parse import urlparse
 
 import requests
@@ -25,7 +28,10 @@ H3WB_ANNOTATION_FILENAMES = (
 COCO_WHOLEBODY_SOURCES = {
     "official_repo": "https://github.com/jin-s13/COCO-WholeBody",
     "official_readme_downloads": "https://github.com/jin-s13/COCO-WholeBody#download",
+    "official_opendatalab": "https://opendatalab.com/OpenDataLab/COCO-WholeBody/download",
 }
+
+OPENXLAB_COCO_REPO = "OpenDataLab/COCO-WholeBody"
 
 H3WB_SOURCES = {
     "official_repo": "https://github.com/wholebody3d/wholebody3d",
@@ -55,8 +61,27 @@ def download_file(url: str, dest: Path) -> None:
         raise
 
 
-def _verify_expected_files(root: Path, filenames: tuple[str, ...], sources: dict[str, str], dataset: str) -> None:
-    missing = [root / filename for filename in filenames if not (root / filename).is_file() or (root / filename).stat().st_size == 0]
+def _verify_expected_files(
+    root: Path,
+    filenames: tuple[str, ...],
+    sources: dict[str, str],
+    dataset: str,
+    validator=None,
+) -> None:
+    missing = []
+    invalid = []
+    for filename in filenames:
+        path = root / filename
+        if not path.is_file() or path.stat().st_size == 0:
+            missing.append(path)
+        elif validator is not None:
+            try:
+                validator(path)
+            except (OSError, ValueError, json.JSONDecodeError) as error:
+                invalid.append((path, str(error)))
+    if invalid:
+        details = "; ".join(f"{path}: {error}" for path, error in invalid)
+        raise ValueError(f"invalid {dataset} annotation files: {details}")
     if not missing:
         return
     print(f"Missing {dataset} annotation files:")
@@ -71,7 +96,39 @@ def _verify_expected_files(root: Path, filenames: tuple[str, ...], sources: dict
     )
 
 
-def download_coco_wholebody(root: Path, with_images: bool, no_verify: bool = False) -> None:
+def _validate_coco_annotation(path: Path) -> None:
+    payload = json.loads(path.read_text(encoding="utf-8"))
+    if not isinstance(payload, dict) or not isinstance(payload.get("images"), list) or not isinstance(payload.get("annotations"), list):
+        raise ValueError("expected top-level 'images' and 'annotations' lists")
+
+
+def _download_coco_annotations_openxlab(root: Path) -> None:
+    executable = shutil.which("openxlab")
+    command = [
+        executable or "openxlab",
+        "dataset",
+        "get",
+        "--dataset-repo",
+        OPENXLAB_COCO_REPO,
+        "--target-path",
+        str(root),
+    ]
+    if executable is None:
+        command_text = " ".join(command)
+        raise RuntimeError(
+            "OpenXLab CLI is required for active COCO-WholeBody annotation download. "
+            "Install it with `pip install openxlab`, run `openxlab login`, then run: "
+            f"`{command_text}`"
+        )
+    subprocess.run(command, check=True)
+
+
+def download_coco_wholebody(
+    root: Path,
+    with_images: bool,
+    no_verify: bool = False,
+    annotation_source: str = "manual",
+) -> None:
     root.mkdir(parents=True, exist_ok=True)
     annotation_root = root / "annotations"
     annotation_root.mkdir(parents=True, exist_ok=True)
@@ -82,8 +139,13 @@ def download_coco_wholebody(root: Path, with_images: bool, no_verify: bool = Fal
         print(f"Place train/val annotation JSON files under: {annotation_root}")
         for name, url in COCO_WHOLEBODY_SOURCES.items():
             print(f"- {name}: {url}")
+    elif annotation_source == "openxlab":
+        _download_coco_annotations_openxlab(root)
+        _verify_expected_files(annotation_root, COCO_ANNOTATION_FILENAMES, COCO_WHOLEBODY_SOURCES, "COCO-WholeBody", _validate_coco_annotation)
+    elif annotation_source == "manual":
+        _verify_expected_files(annotation_root, COCO_ANNOTATION_FILENAMES, COCO_WHOLEBODY_SOURCES, "COCO-WholeBody", _validate_coco_annotation)
     else:
-        _verify_expected_files(annotation_root, COCO_ANNOTATION_FILENAMES, COCO_WHOLEBODY_SOURCES, "COCO-WholeBody")
+        raise ValueError(f"unknown COCO annotation source: {annotation_source}")
 
 
 def download_h3wb(root: Path, no_verify: bool = False) -> None:
@@ -103,11 +165,15 @@ def main() -> None:
     parser.add_argument("--dataset", choices=["coco-wholebody", "h3wb"], required=True)
     parser.add_argument("--root", type=Path, default=Path("data/raw"))
     parser.add_argument("--with-images", action="store_true")
+    parser.add_argument("--annotation-source", choices=["openxlab", "manual"], default=None)
     parser.add_argument("--no-verify", action="store_true", help="create directories and print manual download instructions without checking files")
     args = parser.parse_args()
     if args.dataset == "coco-wholebody":
-        download_coco_wholebody(args.root / "coco-wholebody", args.with_images, args.no_verify)
+        annotation_source = args.annotation_source or "openxlab"
+        download_coco_wholebody(args.root / "coco-wholebody", args.with_images, args.no_verify, annotation_source)
     else:
+        if args.annotation_source == "openxlab":
+            parser.error("--annotation-source openxlab is only supported for --dataset coco-wholebody")
         download_h3wb(args.root / "h3wb", args.no_verify)
 
 

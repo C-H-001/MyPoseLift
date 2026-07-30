@@ -10,11 +10,25 @@ The official README provides annotation downloads through OneDrive Train/Validat
 Commands:
 
 ```bash
+pip install openxlab
+openxlab login
 python tools/download_datasets.py --dataset coco-wholebody --root data/raw --with-images
 python tools/prepare_coco_wholebody.py --annotations data/raw/coco-wholebody/annotations/coco_wholebody_train_v1.0.json --out data/processed/coco_wholebody_train.npz
 ```
 
-The downloader creates `annotations/`, verifies both expected JSON files, and prints the official manual-download links when files are missing. Use `--no-verify` only to create the directory structure before placing manually downloaded files.
+The default COCO annotation source actively runs the official OpenDataLab/OpenXLab command:
+
+```bash
+openxlab dataset get --dataset-repo OpenDataLab/COCO-WholeBody --target-path data/raw/coco-wholebody
+```
+
+The downloader then validates both expected JSON files and their top-level `images` and `annotations` lists. For manual OneDrive, Google Drive, BaiduPan (password `pu6j`), or OpenXLab downloads, use explicit guided verification:
+
+```bash
+python tools/download_datasets.py --dataset coco-wholebody --root data/raw --annotation-source manual
+```
+
+Use `--no-verify` only to create the directory structure before placing files; it does not claim that annotations are present.
 
 ## H3WB
 

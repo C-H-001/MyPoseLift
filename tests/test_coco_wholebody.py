@@ -26,11 +26,43 @@ def test_dataset_returns_normalized_history_sample():
 
 def test_coco_downloader_requires_expected_annotation_files(tmp_path, capsys):
     with pytest.raises(FileNotFoundError, match="missing COCO-WholeBody annotation files"):
-        download_datasets.download_coco_wholebody(tmp_path, with_images=False)
+        download_datasets.download_coco_wholebody(tmp_path, with_images=False, annotation_source="manual")
 
     output = capsys.readouterr().out
     assert "https://github.com/jin-s13/COCO-WholeBody#download" in output
     assert (tmp_path / "annotations").is_dir()
+
+
+def test_coco_openxlab_download_builds_official_command(tmp_path, monkeypatch):
+    calls = []
+
+    def fake_run(command, check):
+        calls.append((command, check))
+        annotations = tmp_path / "annotations"
+        annotations.mkdir(exist_ok=True)
+        for filename in download_datasets.COCO_ANNOTATION_FILENAMES:
+            (annotations / filename).write_text('{"images": [], "annotations": []}', encoding="utf-8")
+
+    monkeypatch.setattr(download_datasets.shutil, "which", lambda name: "openxlab.exe")
+    monkeypatch.setattr(download_datasets.subprocess, "run", fake_run)
+    download_datasets.download_coco_wholebody(tmp_path, with_images=False, annotation_source="openxlab")
+
+    assert calls == [([
+        "openxlab.exe",
+        "dataset",
+        "get",
+        "--dataset-repo",
+        "OpenDataLab/COCO-WholeBody",
+        "--target-path",
+        str(tmp_path),
+    ], True)]
+
+
+def test_coco_openxlab_missing_cli_explains_setup(tmp_path, monkeypatch):
+    monkeypatch.setattr(download_datasets.shutil, "which", lambda name: None)
+
+    with pytest.raises(RuntimeError, match="pip install openxlab.*openxlab login.*OpenDataLab/COCO-WholeBody"):
+        download_datasets.download_coco_wholebody(tmp_path, with_images=False, annotation_source="openxlab")
 
 
 def test_h3wb_downloader_accepts_nonempty_expected_annotation_files(tmp_path):
