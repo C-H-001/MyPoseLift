@@ -1,0 +1,25 @@
+data:
+  train_cache: data/processed/h3wb_2dto3d_train.npz
+  window: 1
+model:
+  hidden_channels: 128
+  use_temporal: false
+loss:
+  part_weights:
+    body: 1.0
+    foot: 1.5
+    face: 2.0
+    left_hand: 2.5
+    right_hand: 2.5
+  local_weights:
+    face: 1.0
+    left_hand: 1.0
+    right_hand: 1.0
+train:
+  device: auto
+  batch_size: 64
+  num_workers: 4
+  lr: 0.0003
+  weight_decay: 0.01
+  epochs: 80
+  out_dir: checkpoints/h3wb_hrgcn_t1
