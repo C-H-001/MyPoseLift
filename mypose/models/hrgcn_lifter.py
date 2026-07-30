@@ -37,6 +37,8 @@ class HRGCNLifter(nn.Module):
         hidden_channels: int = 128,
         use_temporal: bool = False,
     ) -> None:
+        if num_keypoints != NUM_KEYPOINTS:
+            raise ValueError(f"num_keypoints must be {NUM_KEYPOINTS}, got {num_keypoints}")
         super().__init__()
         self.num_keypoints = num_keypoints
         self.use_temporal = use_temporal

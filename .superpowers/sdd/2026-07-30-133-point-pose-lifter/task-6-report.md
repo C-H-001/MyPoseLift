@@ -52,3 +52,42 @@ Additional verification:
 ## Concern
 
 Runtime Torch tests and CPU forward/streaming behavior could not be verified on this host because `torch` cannot load `c10.dll` (`WinError 1114`).
+
+---
+
+## Review Fixes
+
+### Findings addressed
+
+1. `HRGCNLifter` now rejects any `num_keypoints` value other than the project-required 133 with `ValueError("num_keypoints must be 133, got ...")`. This makes the fixed COCO-WholeBody graph edges and fine-keypoint indices explicit and safe.
+2. Added lifter-level tests for streaming equivalence and future-frame isolation. The streaming test compares repeated `step` calls with `forward(history)` for the current pose. The causality test changes a later frame and verifies the earlier history output is unchanged.
+
+### Focused tests added
+
+- `test_lifter_rejects_non_133_keypoint_count`
+- `test_streaming_lifter_matches_batch_current_pose`
+- `test_lifter_output_at_frame_does_not_depend_on_future_frames`
+
+### Verification after fixes
+
+Required test command attempted again:
+
+```text
+pytest tests/test_causal_window.py tests/test_model_forward.py -v
+```
+
+Result: blocked during collection with the same host issue. Pytest collected 0 items and reported 2 import errors, both caused by:
+
+```text
+OSError: [WinError 1114] ... Error loading "E:\Anaconda\Lib\site-packages\torch\lib\c10.dll" or one of its dependencies.
+```
+
+Fallback command:
+
+```text
+python -m py_compile mypose\models\hrgcn_lifter.py mypose\models\temporal_adapter.py tests\test_causal_window.py tests\test_model_forward.py
+```
+
+Result: exit code `0`; no Python compiler errors or output.
+
+Additional verification: `git diff --check` exited `0`.
