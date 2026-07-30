@@ -1,0 +1,54 @@
+# Task 6 Report: Causal Temporal Adapter and HR-GCN-Inspired Lifter
+
+## Status
+
+DONE_WITH_CONCERNS
+
+## Implemented
+
+- Added `CausalTemporalAdapter` with a left-padded depthwise temporal convolution, pointwise projection, residual output, receptive-field property, and streaming cache/reset API.
+- Added `GraphBlock` with bidirectional COCO-WholeBody edge aggregation, degree normalization, residual projection, LayerNorm, and GELU activation.
+- Added `HRGCNLifter` with optional causal temporal adaptation, three graph blocks, body/fine output heads, framewise inference, and streaming/reset APIs.
+- Added the required causal-window and model-forward tests.
+
+## Causality
+
+The temporal adapter applies only left padding. Its output at frame `t` therefore uses the current frame and prior frames within the receptive field. Streaming `step` retains at most the receptive field and returns the current frame output. The lifter selects the final adapted frame for `forward`, and `step` processes one current frame through the same framewise graph lifter.
+
+## Verification
+
+Required command attempted:
+
+```text
+pytest tests/test_causal_window.py tests/test_model_forward.py -v
+```
+
+Result: blocked during test collection by the known host environment issue. Native Torch import failed with:
+
+```text
+OSError: [WinError 1114] ... Error loading "E:\Anaconda\Lib\site-packages\torch\lib\c10.dll" or one of its dependencies.
+```
+
+No test cases executed because both test modules failed while importing `torch`.
+
+Fallback command run:
+
+```text
+python -m py_compile mypose\models\temporal_adapter.py mypose\models\hrgcn_lifter.py tests\test_causal_window.py tests\test_model_forward.py
+```
+
+Result: exit code `0`.
+
+Additional verification:
+
+- `git diff --check`: exit code `0`.
+- `git show --format= --check HEAD`: exit code `0`.
+- No dataset files were added or staged.
+
+## Commit
+
+`79010e5 feat: add causal hrgcn lifter`
+
+## Concern
+
+Runtime Torch tests and CPU forward/streaming behavior could not be verified on this host because `torch` cannot load `c10.dll` (`WinError 1114`).
