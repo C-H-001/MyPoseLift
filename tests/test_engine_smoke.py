@@ -44,10 +44,14 @@ class UnevenMetricDataset:
 
     def __getitem__(self, index):
         error = 1.0 if index < 2 else 3.0
+        history = torch.zeros(1, 133, 3)
+        history[..., 0] = error
+        mask = torch.zeros(133, dtype=torch.bool)
+        mask[: 2 if index == 0 else 1] = True
         return {
-            "history_2d": torch.full((1, 133, 3), error),
+            "history_2d": history,
             "target_3d": torch.zeros(133, 3),
-            "target_mask": torch.ones(133, dtype=torch.bool),
+            "target_mask": mask,
         }
 
 
@@ -59,4 +63,4 @@ class IdentityPoseModel(torch.nn.Module):
 def test_evaluate_weights_batches_by_valid_points():
     loader = DataLoader(UnevenMetricDataset(), batch_size=2)
     metrics = evaluate(IdentityPoseModel(), loader, device=torch.device("cpu"))
-    assert metrics["MPJPE_whole"] == pytest.approx(5.0 / 3.0)
+    assert metrics["MPJPE_whole"] == pytest.approx(6.0 / 4.0)
