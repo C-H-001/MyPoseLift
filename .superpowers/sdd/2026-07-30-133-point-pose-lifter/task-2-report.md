@@ -33,3 +33,15 @@ Implemented the requested transform, root-relative, and sample validation helper
 - New modules only depend on existing `mypose.data.keypoints133` helpers (`LEFT_HIP`, `RIGHT_HIP`, `NUM_KEYPOINTS`, `validate_keypoints_shape`) as required.
 - No dataset files or `data/` content were modified.
 - No regression concerns identified in scope.
+
+## Review Fixes (Follow-up)
+- Addressed P1: `validate_sample` now verifies pelvis-root alignment by checking that `compute_pelvis_root(target_3d)` is approximately zero, rejecting absolute 3D targets.
+- Addressed P1: Added strict target-mask validation to reject non-finite values and non-binary entries (for example `0.5`, `NaN`), and still require at least one valid keypoint.
+- Addressed P2: `normalize_2d_image` now requires `(x, y, confidence)` format by rejecting `(133, 2)` keypoint inputs.
+- Added regression tests in `tests/test_transforms_validation.py` for all three issues:
+  - root-relative target rejection
+  - non-binary/non-finite mask rejection
+  - missing confidence-channel rejection
+
+## Test Result (Fix Validation)
+- `pytest tests/test_camera.py tests/test_transforms_validation.py -v` → 10 passed.

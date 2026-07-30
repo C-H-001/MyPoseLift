@@ -8,6 +8,8 @@ from mypose.data.keypoints133 import LEFT_HIP, RIGHT_HIP, validate_keypoints_sha
 def normalize_2d_image(keypoints_xyc: np.ndarray, image_size: tuple[int, int]) -> np.ndarray:
     keypoints = np.asarray(keypoints_xyc, dtype=np.float32).copy()
     validate_keypoints_shape(keypoints, dims=2, name="keypoints_xyc")
+    if keypoints.shape[1] != 3:
+        raise ValueError(f"keypoints_xyc expected 3 keypoint values (x, y, confidence), got shape {keypoints.shape}")
     width, height = image_size
     if width <= 0 or height <= 0:
         raise ValueError(f"image_size must be positive, got {image_size}")
