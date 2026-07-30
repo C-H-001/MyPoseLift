@@ -91,3 +91,35 @@ python -m py_compile mypose\models\hrgcn_lifter.py mypose\models\temporal_adapte
 Result: exit code `0`; no Python compiler errors or output.
 
 Additional verification: `git diff --check` exited `0`.
+
+---
+
+## Review Fix Round 2
+
+### Finding addressed
+
+Corrected `test_lifter_output_at_frame_does_not_depend_on_future_frames` so it passes both complete five-frame sequences through the `HRGCNLifter` instance's configured temporal adapter. Only frame 4 differs between the sequences, and the test compares adapted outputs for frames 0 through 3. The changed future frame is therefore included in computation but excluded from the assertion, making the test detect right-padded or centered temporal leakage.
+
+### Verification
+
+Required test command attempted:
+
+```text
+pytest tests/test_causal_window.py tests/test_model_forward.py -v
+```
+
+Result: blocked during collection. Pytest collected 0 items and reported 2 import errors because native Torch failed to load:
+
+```text
+OSError: [WinError 1114] ... Error loading "E:\Anaconda\Lib\site-packages\torch\lib\c10.dll" or one of its dependencies.
+```
+
+Fallback command:
+
+```text
+python -m py_compile mypose\models\hrgcn_lifter.py mypose\models\temporal_adapter.py tests\test_causal_window.py tests\test_model_forward.py
+```
+
+Result: exit code `0`; no Python compiler errors or output.
+
+Additional verification: `git diff --check` exited `0`.

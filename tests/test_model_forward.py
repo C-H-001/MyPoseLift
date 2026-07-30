@@ -52,6 +52,6 @@ def test_lifter_output_at_frame_does_not_depend_on_future_frames():
     changed = history.clone()
     changed[:, 4] = changed[:, 4] + 1000.0
     with torch.no_grad():
-        before_future = model(history[:, :4])
-        after_future = model(changed[:, :4])
+        before_future = model.temporal(history)[:, :4]
+        after_future = model.temporal(changed)[:, :4]
     torch.testing.assert_close(before_future, after_future)
