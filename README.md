@@ -37,6 +37,12 @@ python -m mypose.engine.train --config configs/h3wb_hrgcn_causal_t27.yaml
 Each training epoch evaluates the training cache and writes metrics and the
 latest checkpoint below the configured `out_dir`.
 
+## Evaluate
+
+```bash
+python -m mypose.engine.evaluate --config configs/h3wb_hrgcn_t1.yaml --checkpoint <path-to-checkpoint>
+```
+
 ## Inspect
 
 ```bash

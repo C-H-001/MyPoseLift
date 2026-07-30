@@ -1,8 +1,16 @@
 from __future__ import annotations
 
-import torch
+import argparse
+from pathlib import Path
 
+import torch
+import yaml
+from torch.utils.data import DataLoader
+
+from mypose.data.h3wb import H3WBDataset
 from mypose.data.keypoints133 import get_part_indices
+from mypose.engine.checkpoint import load_checkpoint
+from mypose.models.hrgcn_lifter import HRGCNLifter
 
 
 def _distance_sum_count(
@@ -83,3 +91,38 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
         name: distance_sum / valid_count if valid_count else 0.0
         for name, (distance_sum, valid_count) in totals.items()
     }
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser(description="Evaluate a trained pose lifter checkpoint")
+    parser.add_argument("--config", type=Path, required=True)
+    parser.add_argument("--checkpoint", type=Path, required=True)
+    args = parser.parse_args()
+
+    cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
+    requested_device = cfg["train"]["device"]
+    selected_device = (
+        "cuda"
+        if requested_device == "auto" and torch.cuda.is_available()
+        else "cpu"
+        if requested_device == "auto"
+        else requested_device
+    )
+    device = torch.device(selected_device)
+    dataset = H3WBDataset(Path(cfg["data"]["train_cache"]), window=int(cfg["data"]["window"]))
+    dataloader = DataLoader(
+        dataset,
+        batch_size=int(cfg["train"]["batch_size"]),
+        shuffle=False,
+        num_workers=int(cfg["train"]["num_workers"]),
+    )
+    model = HRGCNLifter(
+        hidden_channels=int(cfg["model"]["hidden_channels"]),
+        use_temporal=bool(cfg["model"]["use_temporal"]),
+    ).to(device)
+    load_checkpoint(args.checkpoint, model)
+    print(evaluate(model, dataloader, device))
+
+
+if __name__ == "__main__":
+    main()
