@@ -178,6 +178,7 @@ addopts = "-q"
 Create `.gitignore`:
 
 ```gitignore
+.worktrees/
 __pycache__/
 *.py[cod]
 .pytest_cache/
@@ -1702,7 +1703,9 @@ def main() -> None:
     parser.add_argument("--config", type=Path, required=True)
     args = parser.parse_args()
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
-    device = torch.device("cuda" if torch.cuda.is_available() and cfg["train"]["device"] == "auto" else cfg["train"]["device"])
+    requested_device = cfg["train"]["device"]
+    selected_device = "cuda" if requested_device == "auto" and torch.cuda.is_available() else "cpu" if requested_device == "auto" else requested_device
+    device = torch.device(selected_device)
     train_set = H3WBDataset(Path(cfg["data"]["train_cache"]), window=int(cfg["data"]["window"]))
     train_loader = DataLoader(train_set, batch_size=int(cfg["train"]["batch_size"]), shuffle=True, num_workers=int(cfg["train"]["num_workers"]))
     model = HRGCNLifter(
