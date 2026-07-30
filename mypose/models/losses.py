@@ -57,12 +57,20 @@ class WholeBodyLoss(nn.Module):
         )
         for name, weight in self.local_weights.items():
             total = total + float(weight) * losses[f"{name}_local"]
-        losses["bone"] = self._bone_loss(pred, target)
+        losses["bone"] = self._bone_loss(pred, target, target_mask)
         losses["total"] = total + self.bone_weight * losses["bone"]
         return losses
 
-    def _bone_loss(self, pred: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+    def _bone_loss(
+        self, pred: torch.Tensor, target: torch.Tensor, target_mask: torch.Tensor | None = None
+    ) -> torch.Tensor:
         edge_index = torch.tensor(COCO_WHOLEBODY_EDGES, dtype=torch.long, device=pred.device)
         pred_len = torch.linalg.norm(pred[:, edge_index[:, 0]] - pred[:, edge_index[:, 1]], dim=-1)
         target_len = torch.linalg.norm(target[:, edge_index[:, 0]] - target[:, edge_index[:, 1]], dim=-1)
-        return torch.mean(torch.abs(pred_len - target_len))
+        if target_mask is None:
+            return torch.mean(torch.abs(pred_len - target_len))
+        target_mask = target_mask.to(device=pred.device, dtype=torch.bool)
+        valid_mask = target_mask[:, edge_index[:, 0]] & target_mask[:, edge_index[:, 1]]
+        if valid_mask.sum() == 0:
+            return pred_len.sum() * 0.0
+        return torch.mean(torch.abs(pred_len[valid_mask] - target_len[valid_mask]))

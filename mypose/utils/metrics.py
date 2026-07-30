@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import torch
 
-from mypose.data.keypoints133 import PART_INDICES, get_part_indices
+from mypose.data.keypoints133 import get_part_indices
 
 
 def _valid_mask(mask: torch.Tensor | None, pred: torch.Tensor) -> torch.Tensor:
@@ -42,5 +42,8 @@ def aligned_mpjpe(
     anchor_target = target[:, anchor_index:anchor_index + 1]
     local_pred = pred[:, indices] - anchor_pred
     local_target = target[:, indices] - anchor_target
-    local_mask = None if mask is None else mask[:, indices]
+    local_mask = None if mask is None else _valid_mask(mask, pred)[:, indices]
+    if mask is not None:
+        anchor_valid = _valid_mask(mask, pred)[:, anchor_index]
+        local_mask = local_mask & anchor_valid[:, None]
     return mpjpe(local_pred, local_target, local_mask)
