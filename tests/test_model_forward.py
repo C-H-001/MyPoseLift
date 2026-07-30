@@ -1,7 +1,10 @@
+import copy
+
 import torch
 import pytest
 
 from mypose.models.hrgcn_lifter import HRGCNLifter
+from mypose.models.temporal_adapter import CausalTemporalAdapter
 
 
 def test_lifter_rejects_non_133_keypoint_count():
@@ -55,3 +58,49 @@ def test_lifter_output_at_frame_does_not_depend_on_future_frames():
         before_future = model.temporal(history)[:, :4]
         after_future = model.temporal(changed)[:, :4]
     torch.testing.assert_close(before_future, after_future)
+
+
+def test_t27_lifter_has_27_frame_receptive_field():
+    model = HRGCNLifter(
+        use_temporal=True,
+        hidden_channels=16,
+        temporal_kernel_size=27,
+    )
+
+    assert model.temporal.receptive_field == 27
+
+
+def test_causal_adapter_current_output_depends_on_oldest_frame_in_receptive_field():
+    adapter = CausalTemporalAdapter(
+        in_channels=1,
+        hidden_channels=1,
+        kernel_size=27,
+    )
+    with torch.no_grad():
+        for parameter in adapter.parameters():
+            parameter.fill_(1.0)
+        baseline = torch.zeros(1, 27, 1, 1)
+        changed = baseline.clone()
+        changed[:, 0] = 1.0
+
+        baseline_current = adapter(baseline)[:, -1]
+        changed_current = adapter(changed)[:, -1]
+
+    assert not torch.allclose(baseline_current, changed_current)
+
+
+def test_causal_adapter_stream_history_is_not_aliased_to_input_buffer():
+    torch.manual_seed(5)
+    adapter = CausalTemporalAdapter(3, 4, kernel_size=3)
+    reference = copy.deepcopy(adapter)
+    first = torch.randn(1, 133, 3)
+    original_first = first.clone()
+    second = torch.randn(1, 133, 3)
+
+    adapter.step(first)
+    first.fill_(1000.0)
+    actual = adapter.step(second)
+    reference.step(original_first)
+    expected = reference.step(second)
+
+    torch.testing.assert_close(actual, expected)

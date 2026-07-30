@@ -5,13 +5,21 @@ from pathlib import Path
 import torch
 
 
-def save_checkpoint(path: Path, model: torch.nn.Module, optimizer: torch.optim.Optimizer, epoch: int, metrics: dict[str, float]) -> None:
+def save_checkpoint(
+    path: Path,
+    model: torch.nn.Module,
+    optimizer: torch.optim.Optimizer,
+    epoch: int,
+    metrics: dict[str, float],
+    best_metric: float | None = None,
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save({
         "model": model.state_dict(),
         "optimizer": optimizer.state_dict(),
         "epoch": int(epoch),
         "metrics": dict(metrics),
+        "best_metric": best_metric,
     }, path)
 
 

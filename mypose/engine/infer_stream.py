@@ -3,7 +3,6 @@ from __future__ import annotations
 import numpy as np
 import torch
 
-from mypose.data.keypoints133 import validate_keypoints_shape
 from mypose.models.hrgcn_lifter import HRGCNLifter
 
 
@@ -19,7 +18,10 @@ class PoseStream:
     @torch.no_grad()
     def step(self, frame_2d: np.ndarray | torch.Tensor) -> np.ndarray:
         if isinstance(frame_2d, np.ndarray):
-            validate_keypoints_shape(frame_2d, dims=2, name="frame_2d")
+            if frame_2d.shape != (133, 3):
+                raise ValueError(
+                    f"frame_2d expected shape (133, 3), got {tuple(frame_2d.shape)}"
+                )
             if not np.isfinite(frame_2d).all():
                 raise ValueError("frame_2d must contain only finite values")
             frame = torch.from_numpy(frame_2d).to(device=self.device, dtype=torch.float32)

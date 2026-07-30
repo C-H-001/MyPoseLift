@@ -11,6 +11,7 @@ from mypose.data.h3wb import H3WBDataset
 from mypose.data.keypoints133 import get_part_indices
 from mypose.engine.checkpoint import load_checkpoint
 from mypose.models.hrgcn_lifter import HRGCNLifter
+from mypose.utils.metrics import canonicalize_mask
 
 
 def _distance_sum_count(
@@ -63,7 +64,7 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
     for batch in dataloader:
         history = batch["history_2d"].to(device=device, dtype=torch.float32)
         target = batch["target_3d"].to(device=device, dtype=torch.float32)
-        mask = batch["target_mask"].to(device=device, dtype=torch.bool)
+        mask = canonicalize_mask(batch["target_mask"], target)
         pred = model(history)
         accumulate("MPJPE_whole", _metric_sum_count(pred, target, mask, list(range(133))))
         accumulate("MPJPE_body", _metric_sum_count(pred, target, mask, get_part_indices("body")))
@@ -71,7 +72,7 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
         accumulate("MPJPE_face", _metric_sum_count(pred, target, mask, get_part_indices("face")))
         accumulate(
             "MPJPE_face_nose_aligned",
-            _metric_sum_count(pred, target, mask, list(range(23, 91)), anchor_index=30),
+            _metric_sum_count(pred, target, mask, list(range(23, 91)), anchor_index=0),
         )
         accumulate(
             "MPJPE_left_hand",
@@ -97,6 +98,11 @@ def main() -> None:
     parser = argparse.ArgumentParser(description="Evaluate a trained pose lifter checkpoint")
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--checkpoint", type=Path, required=True)
+    parser.add_argument(
+        "--cache",
+        type=Path,
+        help="override data.val_cache for an explicit smoke-test cache",
+    )
     args = parser.parse_args()
 
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
@@ -109,7 +115,8 @@ def main() -> None:
         else requested_device
     )
     device = torch.device(selected_device)
-    dataset = H3WBDataset(Path(cfg["data"]["train_cache"]), window=int(cfg["data"]["window"]))
+    cache_file = args.cache or Path(cfg["data"]["val_cache"])
+    dataset = H3WBDataset(cache_file, window=int(cfg["data"]["window"]))
     dataloader = DataLoader(
         dataset,
         batch_size=int(cfg["train"]["batch_size"]),
@@ -119,6 +126,8 @@ def main() -> None:
     model = HRGCNLifter(
         hidden_channels=int(cfg["model"]["hidden_channels"]),
         use_temporal=bool(cfg["model"]["use_temporal"]),
+        temporal_kernel_size=int(cfg["model"].get("temporal_kernel_size", 3)),
+        temporal_dilation=int(cfg["model"].get("temporal_dilation", 1)),
     ).to(device)
     load_checkpoint(args.checkpoint, model)
     print(evaluate(model, dataloader, device))

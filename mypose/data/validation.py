@@ -34,8 +34,15 @@ def validate_sample(sample: dict) -> None:
 
     validate_keypoints_shape(history, dims=3, name="history_2d")
     validate_keypoints_shape(target, dims=2, name="target_3d")
+    if history.shape[-1] != 3:
+        raise ValueError(f"history_2d expected 3 keypoint values, got shape {history.shape}")
+    if target.shape[-1] != 3:
+        raise ValueError(f"target_3d expected 3 coordinate values, got shape {target.shape}")
     if mask.shape not in ((NUM_KEYPOINTS,), (NUM_KEYPOINTS, 1)):
         raise ValueError(f"target_mask expected shape (133,) or (133, 1), got {mask.shape}")
+    if mask.shape == (NUM_KEYPOINTS, 1):
+        mask = mask[:, 0]
+        sample["target_mask"] = mask
     _validate_target_mask(mask)
     valid_count = int(mask.astype(bool).sum())
     min_valid = int(np.ceil(NUM_KEYPOINTS * MIN_TARGET_KEYPOINT_FRACTION))

@@ -52,7 +52,21 @@ Commands:
 
 ```bash
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --out data/processed/h3wb_2dto3d_train.npz
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 The downloader verifies both expected JSON files and prints the official Google Drive link when either is missing. The preparation command creates the cache consumed by the training configurations in `configs/`.
+
+The parser consumes the official `keypoints_2d` and `keypoints_3d` fields.
+Pixel coordinates are normalized using per-sample `image_width` /
+`image_height`, `width` / `height`, or `image_size` metadata. When those are
+absent, the four documented Human3.6M camera IDs use their 1000-pixel camera
+resolutions (heights 1000 or 1002). Bounding boxes are never treated as image
+dimensions, and samples without a valid normalization basis are rejected.
+
+H3WB does not provide an official validation partition and recommends
+five-fold cross-validation. The preparation command sorts sequence IDs
+deterministically, assigns complete sequences to folds, and writes disjoint
+train and validation caches. Run `--val-fold 0` through `4` for a complete
+five-fold result. The released test annotations remain reserved for official
+test evaluation.

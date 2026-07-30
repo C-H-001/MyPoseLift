@@ -81,3 +81,28 @@ def test_validate_sample_rejects_sparsely_valid_mask():
     sample["target_mask"][0] = True
     with pytest.raises(ValueError, match="too few valid keypoints"):
         validate_sample(sample)
+
+
+def test_validate_sample_requires_exactly_three_target_coordinates():
+    sample = {
+        "history_2d": np.zeros((1, 133, 3), dtype=np.float32),
+        "target_3d": np.zeros((133, 2), dtype=np.float32),
+        "target_mask": np.ones((133,), dtype=bool),
+        "meta": {"source": "synthetic"},
+    }
+
+    with pytest.raises(ValueError, match="target_3d expected 3 coordinate values"):
+        validate_sample(sample)
+
+
+def test_validate_sample_canonicalizes_singleton_column_mask():
+    sample = {
+        "history_2d": np.zeros((1, 133, 3), dtype=np.float32),
+        "target_3d": np.zeros((133, 3), dtype=np.float32),
+        "target_mask": np.ones((133, 1), dtype=bool),
+        "meta": {"source": "synthetic"},
+    }
+
+    validate_sample(sample)
+
+    assert sample["target_mask"].shape == (133,)

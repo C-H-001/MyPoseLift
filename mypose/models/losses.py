@@ -4,7 +4,7 @@ import torch
 from torch import nn
 
 from mypose.data.keypoints133 import COCO_WHOLEBODY_EDGES
-from mypose.utils.metrics import aligned_mpjpe, mpjpe, part_mpjpe
+from mypose.utils.metrics import aligned_mpjpe, canonicalize_mask, mpjpe, part_mpjpe
 
 
 DEFAULT_PART_WEIGHTS = {
@@ -39,6 +39,8 @@ class WholeBodyLoss(nn.Module):
         target: torch.Tensor,
         target_mask: torch.Tensor | None = None,
     ) -> dict[str, torch.Tensor]:
+        if target_mask is not None:
+            target_mask = canonicalize_mask(target_mask, pred)
         losses: dict[str, torch.Tensor] = {}
         losses["whole"] = mpjpe(pred, target, target_mask)
         total = losses["whole"]
@@ -47,7 +49,7 @@ class WholeBodyLoss(nn.Module):
             losses[f"{part}_mpjpe"] = value
             total = total + float(weight) * value
         losses["face_local"] = aligned_mpjpe(
-            pred, target, list(range(23, 91)), anchor_index=30, mask=target_mask
+            pred, target, list(range(23, 91)), anchor_index=0, mask=target_mask
         )
         losses["left_hand_local"] = aligned_mpjpe(
             pred, target, list(range(91, 112)), anchor_index=91, mask=target_mask

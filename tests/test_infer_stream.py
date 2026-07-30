@@ -38,3 +38,18 @@ def test_pose_stream_rejects_non_finite_tensor_values():
     frame[0, 0] = torch.nan
     with pytest.raises(ValueError, match="frame_2d must contain only finite values"):
         stream.step(frame)
+
+
+@pytest.mark.parametrize(
+    "frame",
+    [
+        np.zeros((133, 2), dtype=np.float32),
+        torch.zeros((133, 2), dtype=torch.float32),
+    ],
+)
+def test_pose_stream_rejects_frames_without_confidence_channel(frame):
+    model = HRGCNLifter(hidden_channels=16, use_temporal=True)
+    stream = PoseStream(model, device=torch.device("cpu"))
+
+    with pytest.raises(ValueError, match=r"frame_2d expected shape \(133, 3\)"):
+        stream.step(frame)

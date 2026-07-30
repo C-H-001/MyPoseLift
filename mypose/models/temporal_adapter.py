@@ -8,6 +8,10 @@ from torch.nn import functional as F
 class CausalTemporalAdapter(nn.Module):
     def __init__(self, in_channels: int, hidden_channels: int, kernel_size: int = 3, dilation: int = 1) -> None:
         super().__init__()
+        if kernel_size <= 0:
+            raise ValueError(f"kernel_size must be positive, got {kernel_size}")
+        if dilation <= 0:
+            raise ValueError(f"dilation must be positive, got {dilation}")
         self.in_channels = in_channels
         self.kernel_size = kernel_size
         self.dilation = dilation
@@ -44,7 +48,7 @@ class CausalTemporalAdapter(nn.Module):
         self._stream = []
 
     def step(self, frame: torch.Tensor) -> torch.Tensor:
-        self._stream.append(frame)
+        self._stream.append(frame.detach().clone())
         if len(self._stream) > self.receptive_field:
             self._stream = self._stream[-self.receptive_field:]
         seq = torch.stack(self._stream, dim=1)

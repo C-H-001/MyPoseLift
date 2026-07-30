@@ -7,17 +7,24 @@ import torch
 from mypose.data.keypoints133 import get_part_indices
 
 
-def _valid_mask(mask: torch.Tensor | None, pred: torch.Tensor) -> torch.Tensor:
+def canonicalize_mask(mask: torch.Tensor | None, pred: torch.Tensor) -> torch.Tensor:
     if mask is None:
         return torch.ones(pred.shape[:-1], dtype=torch.bool, device=pred.device)
-    return mask.to(device=pred.device, dtype=torch.bool)
+    valid = mask.to(device=pred.device, dtype=torch.bool)
+    if valid.shape == pred.shape[:-1] + (1,):
+        valid = valid.squeeze(-1)
+    if valid.shape != pred.shape[:-1]:
+        raise ValueError(
+            f"mask expected shape {tuple(pred.shape[:-1])}, got {tuple(mask.shape)}"
+        )
+    return valid
 
 
 def mpjpe(
     pred: torch.Tensor, target: torch.Tensor, mask: torch.Tensor | None = None
 ) -> torch.Tensor:
     distances = torch.linalg.norm(pred - target, dim=-1)
-    valid = _valid_mask(mask, pred)
+    valid = canonicalize_mask(mask, pred)
     if valid.sum() == 0:
         return distances.sum() * 0.0
     return distances[valid].mean()
@@ -42,8 +49,8 @@ def aligned_mpjpe(
     anchor_target = target[:, anchor_index:anchor_index + 1]
     local_pred = pred[:, indices] - anchor_pred
     local_target = target[:, indices] - anchor_target
-    local_mask = None if mask is None else _valid_mask(mask, pred)[:, indices]
+    local_mask = None if mask is None else canonicalize_mask(mask, pred)[:, indices]
     if mask is not None:
-        anchor_valid = _valid_mask(mask, pred)[:, anchor_index]
+        anchor_valid = canonicalize_mask(mask, pred)[:, anchor_index]
         local_mask = local_mask & anchor_valid[:, None]
     return mpjpe(local_pred, local_target, local_mask)

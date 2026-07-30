@@ -1,9 +1,12 @@
 data:
-  train_cache: data/processed/h3wb_2dto3d_train.npz
+  train_cache: data/processed/h3wb_2dto3d_train_fold0.npz
+  val_cache: data/processed/h3wb_2dto3d_val_fold0.npz
   window: 27
 model:
   hidden_channels: 128
   use_temporal: true
+  temporal_kernel_size: 27
+  temporal_dilation: 1
 loss:
   part_weights:
     body: 1.0
@@ -22,4 +25,5 @@ train:
   lr: 0.0003
   weight_decay: 0.01
   epochs: 80
+  seed: 0
   out_dir: checkpoints/h3wb_hrgcn_causal_t27

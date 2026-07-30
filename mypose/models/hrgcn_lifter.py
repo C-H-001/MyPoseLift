@@ -36,13 +36,24 @@ class HRGCNLifter(nn.Module):
         in_channels: int = 3,
         hidden_channels: int = 128,
         use_temporal: bool = False,
+        temporal_kernel_size: int = 3,
+        temporal_dilation: int = 1,
     ) -> None:
         if num_keypoints != NUM_KEYPOINTS:
             raise ValueError(f"num_keypoints must be {NUM_KEYPOINTS}, got {num_keypoints}")
         super().__init__()
         self.num_keypoints = num_keypoints
         self.use_temporal = use_temporal
-        self.temporal = CausalTemporalAdapter(in_channels, hidden_channels, kernel_size=3) if use_temporal else None
+        self.temporal = (
+            CausalTemporalAdapter(
+                in_channels,
+                hidden_channels,
+                kernel_size=temporal_kernel_size,
+                dilation=temporal_dilation,
+            )
+            if use_temporal
+            else None
+        )
         self.input = nn.Linear(in_channels, hidden_channels)
         self.blocks = nn.ModuleList([GraphBlock(hidden_channels), GraphBlock(hidden_channels), GraphBlock(hidden_channels)])
         self.body_head = nn.Linear(hidden_channels, 3)

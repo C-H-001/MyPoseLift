@@ -59,3 +59,23 @@ def test_boneloss_respects_target_mask():
     losses = WholeBodyLoss()(pred, target, mask)
     assert losses["bone"].item() == 0.0
     assert losses["total"].item() == 0.0
+
+
+def test_metrics_and_loss_canonicalize_batched_singleton_mask():
+    pred = torch.zeros(2, 133, 3)
+    target = torch.zeros(2, 133, 3)
+    mask = torch.ones(2, 133, 1, dtype=torch.bool)
+
+    assert mpjpe(pred, target, mask).item() == 0.0
+    assert WholeBodyLoss()(pred, target, mask)["total"].item() == 0.0
+
+
+def test_face_local_loss_aligns_to_coco_body_nose_index_zero():
+    pred = torch.zeros(1, 133, 3)
+    target = torch.zeros(1, 133, 3)
+    pred[:, 0, 0] = 2.0
+    pred[:, 23:91, 0] = 5.0
+
+    loss = WholeBodyLoss()(pred, target, torch.ones(1, 133, dtype=torch.bool))
+
+    assert loss["face_local"].item() == 3.0

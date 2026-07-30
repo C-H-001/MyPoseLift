@@ -1,13 +1,19 @@
 {
   "sample_000001": {
     "image_path": "S1/Directions/000001.jpg",
-    "bbox": [0, 0, 640, 480],
-    "keypoint_2d": {
+    "image_width": 640,
+    "image_height": 480,
+    "bbox": [100, 100, 200, 300],
+    "subject": "S1",
+    "action": "Directions",
+    "camera": "54138969",
+    "frame_idx": 1,
+    "keypoints_2d": {
       "0": {"x": 320, "y": 240},
       "11": {"x": 300, "y": 300},
       "12": {"x": 340, "y": 300}
     },
-    "keypoint_3d": {
+    "keypoints_3d": {
       "0": {"x": 0, "y": 100, "z": 1000},
       "1": {"x": 1, "y": 101, "z": 1001},
       "2": {"x": 2, "y": 102, "z": 1002},

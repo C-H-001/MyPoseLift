@@ -21,11 +21,13 @@ See [docs/datasets.md](docs/datasets.md) for licensing and source details.
 ```bash
 python tools/download_datasets.py --dataset coco-wholebody --root data/raw --with-images
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --out data/processed/h3wb_2dto3d_train.npz
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 Downloaded datasets and generated caches belong under `data/`, which is not
-committed to git.
+committed to git. H3WB does not publish a validation split, so preparation
+uses deterministic sequence-level folds. Report all five held-out folds for
+cross-validation results; a single fold is suitable for development only.
 
 ## Train
 
@@ -34,14 +36,25 @@ python -m mypose.engine.train --config configs/h3wb_hrgcn_t1.yaml
 python -m mypose.engine.train --config configs/h3wb_hrgcn_causal_t27.yaml
 ```
 
-Each training epoch evaluates the training cache and writes metrics and the
-latest checkpoint below the configured `out_dir`.
+Each training epoch evaluates only `data.val_cache`. Training writes
+`last.pt` every epoch and updates `best.pt` when validation `MPJPE_whole`
+improves. Resume from the epoch after a saved checkpoint with:
+
+```bash
+python -m mypose.engine.train --config configs/h3wb_hrgcn_causal_t27.yaml --resume checkpoints/h3wb_hrgcn_causal_t27/last.pt
+```
+
+The causal T=27 config uses a strictly left-padded 27-frame temporal kernel,
+so its configured receptive field is genuinely 27 frames.
 
 ## Evaluate
 
 ```bash
 python -m mypose.engine.evaluate --config configs/h3wb_hrgcn_t1.yaml --checkpoint <path-to-checkpoint>
 ```
+
+Standalone evaluation reads `data.val_cache` by default. `--cache` is an
+explicit override for smoke tests or another prepared fold.
 
 ## Inspect
 
