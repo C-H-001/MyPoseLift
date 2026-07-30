@@ -4,8 +4,8 @@
 
 Official repository: https://github.com/jin-s13/COCO-WholeBody
 
-Images are COCO 2017 train/val images from http://images.cocodataset.org.
-The official COCO-WholeBody repository lists OneDrive, Google Drive, BaiduPan, and OpenXLab annotation downloads. The annotations are for research and non-commercial use; commercial usage requires contacting the dataset owners. The annotations use the COCO-WholeBody 133 layout: 17 body, 6 foot, 68 face, and 42 hand keypoints.
+Images are COCO 2017 train/val images from the [COCO 2017 website](http://images.cocodataset.org).
+The official README provides annotation downloads through OneDrive Train/Validation, Google Drive Train/Validation, BaiduPan Train&Validation (password `pu6j`), and OpenXLab. The annotations belong to SenseTime Research, are licensed under [Creative Commons Attribution 4.0](https://creativecommons.org/licenses/by/4.0/), and are restricted to research and non-commercial use. The images follow Flickr terms. The annotations use the COCO-WholeBody 133 layout: 17 body, 6 foot, 68 face, and 42 hand keypoints.
 
 Commands:
 
@@ -14,11 +14,13 @@ python tools/download_datasets.py --dataset coco-wholebody --root data/raw --wit
 python tools/prepare_coco_wholebody.py --annotations data/raw/coco-wholebody/annotations/coco_wholebody_train_v1.0.json --out data/processed/coco_wholebody_train.npz
 ```
 
+The downloader creates `annotations/`, verifies both expected JSON files, and prints the official manual-download links when files are missing. Use `--no-verify` only to create the directory structure before placing manually downloaded files.
+
 ## H3WB
 
 Official repository: https://github.com/wholebody3d/wholebody3d
 
-H3WB extends Human3.6M to 133 whole-body 3D keypoints with the same skeleton layout as COCO-WholeBody. The official repository lists Google Drive downloads for H3WB annotations and the 2D-to-3D task. Human3.6M images are governed by the Human3.6M license.
+H3WB extends Human3.6M to 133 whole-body 3D keypoints with the same skeleton layout as COCO-WholeBody. The official README provides Google Drive downloads. `2Dto3D_train.json` is used for train/validation and `2Dto3D_test_2d.json` is used for the test leaderboard. The H3WB project is MIT licensed; images follow the Human3.6M license.
 
 Expected files for this project:
 
@@ -31,5 +33,6 @@ Commands:
 
 ```bash
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --out data/processed/h3wb_2dto3d_train.npz
 ```
+
+The downloader verifies both expected JSON files and prints the official Google Drive link when either is missing. H3WB preparation is introduced by Task 5; `tools/prepare_h3wb.py` is not part of Task 4.

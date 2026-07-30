@@ -26,3 +26,21 @@ DONE_WITH_CONCERNS
 ## Commit
 
 - `feat: add dataset download and coco parser`
+
+## Review Fixes
+
+### Findings addressed
+
+1. COCO-WholeBody and H3WB download flows now create `annotations/`, verify every expected non-empty annotation file, print the official repository/download anchors and missing paths, and raise `FileNotFoundError` unless `--no-verify` is explicitly supplied. Direct cloud-hosted annotation downloads remain guided/manual because the official sources use OneDrive, Google Drive, BaiduPan, or OpenXLab flows.
+2. Removed the Task 5-only `tools/prepare_h3wb.py` command from the Task 4 workflow and documented that H3WB preparation is introduced by Task 5.
+3. `download_file` streams into a `.part` file, atomically replaces the destination only after completion, and removes partial output on failure.
+4. Documented the controller-verified COCO-WholeBody sources, OneDrive/Google Drive/BaiduPan/OpenXLab locations, BaiduPan password `pu6j`, SenseTime Research ownership, CC BY 4.0 annotation license, research/non-commercial restriction, and Flickr image terms. H3WB Google Drive, split filenames, MIT project license, and Human3.6M image license are also documented.
+
+### Additional verification
+
+- `pytest tests/test_coco_wholebody.py -v`: 5 passed.
+- `pytest tests/test_keypoints133.py tests/test_transforms_validation.py tests/test_camera.py tests/test_coco_wholebody.py -v`: 22 passed.
+- `python tools/download_datasets.py --help`: passed; displayed `--no-verify` and the required dataset choices.
+- Offline smoke test for `download_coco_wholebody(..., no_verify=True)`: passed; created the annotation directory and printed official anchors.
+- `git diff --check`: passed.
+- `pytest -v`: still blocked during collection by PyTorch `WinError 1114` loading `E:\Anaconda\Lib\site-packages\torch\lib\c10.dll`; no Task 4 test failure was reached.
