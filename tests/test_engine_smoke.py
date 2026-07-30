@@ -1,5 +1,4 @@
-from pathlib import Path
-
+import pytest
 import torch
 from torch.utils.data import DataLoader, TensorDataset
 
@@ -37,3 +36,27 @@ def test_evaluate_returns_part_metrics():
     metrics = evaluate(model, loader, device=torch.device("cpu"))
     assert "MPJPE_whole" in metrics
     assert "MPJPE_hands_wrist_aligned" in metrics
+
+
+class UnevenMetricDataset:
+    def __len__(self):
+        return 3
+
+    def __getitem__(self, index):
+        error = 1.0 if index < 2 else 3.0
+        return {
+            "history_2d": torch.full((1, 133, 3), error),
+            "target_3d": torch.zeros(133, 3),
+            "target_mask": torch.ones(133, dtype=torch.bool),
+        }
+
+
+class IdentityPoseModel(torch.nn.Module):
+    def forward(self, history_2d):
+        return history_2d[:, -1]
+
+
+def test_evaluate_weights_batches_by_valid_points():
+    loader = DataLoader(UnevenMetricDataset(), batch_size=2)
+    metrics = evaluate(IdentityPoseModel(), loader, device=torch.device("cpu"))
+    assert metrics["MPJPE_whole"] == pytest.approx(5.0 / 3.0)
