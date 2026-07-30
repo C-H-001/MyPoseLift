@@ -69,3 +69,15 @@ def test_validate_sample_rejects_non_binary_mask_values():
     }
     with pytest.raises(ValueError, match="target_mask must be binary"):
         validate_sample(sample)
+
+
+def test_validate_sample_rejects_sparsely_valid_mask():
+    sample = {
+        "history_2d": np.zeros((1, 133, 3), dtype=np.float32),
+        "target_3d": np.zeros((133, 3), dtype=np.float32),
+        "target_mask": np.zeros((133,), dtype=bool),
+        "meta": {"source": "synthetic"},
+    }
+    sample["target_mask"][0] = True
+    with pytest.raises(ValueError, match="too few valid keypoints"):
+        validate_sample(sample)

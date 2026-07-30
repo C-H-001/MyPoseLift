@@ -6,6 +6,9 @@ from mypose.data.transforms import compute_pelvis_root
 from mypose.data.keypoints133 import NUM_KEYPOINTS, validate_keypoints_shape
 
 
+MIN_TARGET_KEYPOINT_FRACTION = 0.5
+
+
 def _require_finite(name: str, value: np.ndarray) -> None:
     if not np.isfinite(value).all():
         raise ValueError(f"{name} contains non-finite values")
@@ -34,8 +37,13 @@ def validate_sample(sample: dict) -> None:
     if mask.shape not in ((NUM_KEYPOINTS,), (NUM_KEYPOINTS, 1)):
         raise ValueError(f"target_mask expected shape (133,) or (133, 1), got {mask.shape}")
     _validate_target_mask(mask)
-    if mask.astype(bool).sum() == 0:
-        raise ValueError("target_mask has no valid keypoints")
+    valid_count = int(mask.astype(bool).sum())
+    min_valid = int(np.ceil(NUM_KEYPOINTS * MIN_TARGET_KEYPOINT_FRACTION))
+    if valid_count < min_valid:
+        raise ValueError(
+            f"target_mask has too few valid keypoints: {valid_count}/{NUM_KEYPOINTS}, "
+            f"expected at least {min_valid}"
+        )
     _require_finite("history_2d", history)
     _require_finite("target_3d", target)
     root = compute_pelvis_root(target)

@@ -45,3 +45,12 @@ Implemented the requested transform, root-relative, and sample validation helper
 
 ## Test Result (Fix Validation)
 - `pytest tests/test_camera.py tests/test_transforms_validation.py -v` → 10 passed.
+
+## Review Fix Round 2
+- Added a constant minimum-valid-keypoint ratio in `validate_sample`:
+  - `MIN_TARGET_KEYPOINT_FRACTION = 0.5`
+  - effective threshold `ceil(133 * 0.5) = 67` valid points required.
+- Kept existing interface `validate_sample(sample: dict)` unchanged (no new parameters).
+- Added regression test `test_validate_sample_rejects_sparsely_valid_mask` to enforce rejection when only one keypoint is valid.
+- Re-ran focused validation:
+  - `pytest tests/test_camera.py tests/test_transforms_validation.py -v`
