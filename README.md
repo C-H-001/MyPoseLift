@@ -134,6 +134,18 @@ The plotting command compares one current-frame ground-truth pose with the
 checkpoint prediction using the 65-point skeleton edges. It defaults to
 `reports/gt_pred.png`; pass `--cache` to override the validation cache.
 
+## Sequence Viewer
+
+```bash
+python tools/export_sequence_viewer.py --config configs/h3wb_tcn_t81.yaml --checkpoint checkpoints/h3wb_tcn_t81/best.pt --out reports/h3wb_sequence_viewer.html
+```
+
+The sequence viewer exports a standalone HTML report with a frame slider. The
+left pane shows the current 2D skeleton input, and the right pane overlays the
+3D ground truth and checkpoint prediction. By default it exports the first 3
+validation sequences with up to 120 frames each; use `--num-sequences`,
+`--frames-per-sequence`, `--start-index`, and `--cache` to choose another subset.
+
 ## Inference
 
 Streaming inference is provided by `mypose.engine.infer_stream.PoseStream`.
