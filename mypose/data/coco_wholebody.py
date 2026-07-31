@@ -6,6 +6,7 @@ from typing import Any
 
 import numpy as np
 
+from mypose.data.keypoints65 import NUM_KEYPOINTS, remap_133_to_65
 from mypose.data.transforms import normalize_2d_image
 
 
@@ -33,7 +34,7 @@ def load_coco_wholebody_annotations(path: Path) -> list[dict]:
     samples = []
     for ann in payload["annotations"]:
         image = images[ann["image_id"]]
-        keypoints = _annotation_to_133(ann)
+        keypoints = remap_133_to_65(_annotation_to_133(ann))
         samples.append({
             "keypoints_2d": keypoints,
             "image_size": (int(image["width"]), int(image["height"])),
@@ -62,8 +63,8 @@ class CocoWholeBodyDataset:
         keypoints = normalize_2d_image(raw["keypoints_2d"], raw["image_size"])
         sample = {
             "history_2d": keypoints[None, :, :],
-            "target_3d": np.zeros((133, 3), dtype=np.float32),
-            "target_mask": np.zeros((133,), dtype=bool),
+            "target_3d": np.zeros((NUM_KEYPOINTS, 3), dtype=np.float32),
+            "target_mask": np.zeros((NUM_KEYPOINTS,), dtype=bool),
             "meta": raw["meta"],
         }
         sample["meta"]["source"] = "coco-wholebody"

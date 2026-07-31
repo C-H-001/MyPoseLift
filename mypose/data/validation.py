@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import numpy as np
 
+from mypose.data.keypoints65 import NUM_KEYPOINTS, validate_keypoints_shape
 from mypose.data.transforms import compute_pelvis_root
-from mypose.data.keypoints133 import NUM_KEYPOINTS, validate_keypoints_shape
 
 
 MIN_TARGET_KEYPOINT_FRACTION = 0.5
@@ -39,7 +39,7 @@ def validate_sample(sample: dict) -> None:
     if target.shape[-1] != 3:
         raise ValueError(f"target_3d expected 3 coordinate values, got shape {target.shape}")
     if mask.shape not in ((NUM_KEYPOINTS,), (NUM_KEYPOINTS, 1)):
-        raise ValueError(f"target_mask expected shape (133,) or (133, 1), got {mask.shape}")
+        raise ValueError(f"target_mask expected shape (65,) or (65, 1), got {mask.shape}")
     if mask.shape == (NUM_KEYPOINTS, 1):
         mask = mask[:, 0]
         sample["target_mask"] = mask

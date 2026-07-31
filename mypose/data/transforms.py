@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import numpy as np
 
-from mypose.data.keypoints133 import LEFT_HIP, RIGHT_HIP, validate_keypoints_shape
+from mypose.data.keypoints65 import LEFT_HIP, RIGHT_HIP, validate_keypoints_shape
 
 
 def normalize_2d_image(keypoints_xyc: np.ndarray, image_size: tuple[int, int]) -> np.ndarray:

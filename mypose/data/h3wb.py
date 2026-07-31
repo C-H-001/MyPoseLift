@@ -7,6 +7,11 @@ from typing import Any
 import numpy as np
 from torch.utils.data import Dataset
 
+from mypose.data.keypoints65 import (
+    NUM_KEYPOINTS,
+    remap_133_to_65,
+    remap_mask_133_to_65,
+)
 from mypose.data.transforms import make_root_relative, normalize_2d_image
 from mypose.data.validation import validate_sample
 
@@ -131,12 +136,12 @@ def load_h3wb_json(path: Path) -> list[dict]:
         if not mask3d[11] or not mask3d[12]:
             raise ValueError("target_3d requires valid left and right hip annotations at indices 11 and 12")
         xyc = np.concatenate([xy, mask2d[:, None].astype(np.float32)], axis=1)
-        norm_2d = normalize_2d_image(xyc, _image_size(item))
-        rel_3d, _ = make_root_relative(xyz)
+        norm_2d = normalize_2d_image(remap_133_to_65(xyc), _image_size(item))
+        rel_3d, _ = make_root_relative(remap_133_to_65(xyz))
         sample = {
             "history_2d": norm_2d[None, :, :],
             "target_3d": rel_3d,
-            "target_mask": mask3d,
+            "target_mask": remap_mask_133_to_65(mask3d),
             "meta": {
                 "source": "h3wb",
                 "sample_id": sample_id,
@@ -194,8 +199,12 @@ def load_h3wb_npz(path: Path) -> list[dict]:
                         [pose_2d[index], np.ones((133, 1), dtype=np.float32)],
                         axis=1,
                     )
-                    norm_2d = normalize_2d_image(xyc, (width, height))
-                    rel_3d, _ = make_root_relative(camera_3d[index])
+                    norm_2d = normalize_2d_image(
+                        remap_133_to_65(xyc), (width, height)
+                    )
+                    rel_3d, _ = make_root_relative(
+                        remap_133_to_65(camera_3d[index])
+                    )
                     sample_id = (
                         int(sample_ids[index])
                         if sample_ids is not None and len(sample_ids) > index
@@ -204,7 +213,7 @@ def load_h3wb_npz(path: Path) -> list[dict]:
                     sample = {
                         "history_2d": norm_2d[None, :, :],
                         "target_3d": rel_3d,
-                        "target_mask": mask,
+                        "target_mask": remap_mask_133_to_65(mask),
                         "meta": {
                             "source": "h3wb_release_npz",
                             "sample_id": sample_id,
@@ -308,9 +317,9 @@ class H3WBDataset(Dataset):
             self.target_masks = self.target_masks[..., 0]
         sample_count = self.inputs_2d.shape[0]
         if (
-            self.inputs_2d.shape[1:] != (133, 3)
-            or self.targets_3d.shape != (sample_count, 133, 3)
-            or self.target_masks.shape != (sample_count, 133)
+            self.inputs_2d.shape[1:] != (NUM_KEYPOINTS, 3)
+            or self.targets_3d.shape != (sample_count, NUM_KEYPOINTS, 3)
+            or self.target_masks.shape != (sample_count, NUM_KEYPOINTS)
             or len(self.metas) != sample_count
             or len(self.frame_ids) != sample_count
             or len(self.sequence_ids) != sample_count

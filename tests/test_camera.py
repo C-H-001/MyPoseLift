@@ -5,14 +5,14 @@ from mypose.utils.camera import meters_to_millimeters
 
 
 def test_compute_pelvis_root_uses_hip_midpoint():
-    pose = np.zeros((133, 3), dtype=np.float32)
+    pose = np.zeros((65, 3), dtype=np.float32)
     pose[11] = [10.0, 2.0, 4.0]
     pose[12] = [14.0, 6.0, 8.0]
     np.testing.assert_allclose(compute_pelvis_root(pose), [12.0, 4.0, 6.0])
 
 
 def test_make_root_relative_subtracts_pelvis_from_all_points():
-    pose = np.zeros((133, 3), dtype=np.float32)
+    pose = np.zeros((65, 3), dtype=np.float32)
     pose[11] = [2.0, 0.0, 0.0]
     pose[12] = [4.0, 0.0, 0.0]
     pose[0] = [13.0, 5.0, -1.0]

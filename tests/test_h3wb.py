@@ -24,7 +24,7 @@ def _pose(
 ) -> dict:
     points_3d = {
         str(index): {"x": float(index), "y": float(index + 100), "z": float(index + 1000)}
-        for index in range(68)
+        for index in range(133)
         if index != 25 and not (omit_hips and index == 11)
     }
     points_3d["11"] = {"x": -100.0, "y": 0.0, "z": 1000.0}
@@ -53,11 +53,11 @@ def test_load_h3wb_json_fills_missing_points_and_root_relative_target():
     samples = load_h3wb_json(Path("tests/fixtures/h3wb_tiny.json"))
     assert len(samples) == 1
     sample = samples[0]
-    assert sample["history_2d"].shape == (1, 133, 3)
-    assert sample["target_3d"].shape == (133, 3)
+    assert sample["history_2d"].shape == (1, 65, 3)
+    assert sample["target_3d"].shape == (65, 3)
     np.testing.assert_allclose((sample["target_3d"][11] + sample["target_3d"][12]) / 2.0, [0.0, 0.0, 0.0])
     assert sample["target_mask"][0]
-    assert not sample["target_mask"][25]
+    assert not sample["target_mask"][33]
     np.testing.assert_allclose(sample["history_2d"][0, 0, :2], [0.0, 0.0])
 
 
@@ -113,8 +113,10 @@ def test_load_h3wb_annotations_reads_official_release_npz(tmp_path):
     samples = load_h3wb_annotations(annotation_file)
 
     assert len(samples) == 2
-    assert samples[0]["history_2d"].shape == (1, 133, 3)
-    assert samples[0]["target_3d"].shape == (133, 3)
+    assert samples[0]["history_2d"].shape == (1, 65, 3)
+    assert samples[0]["target_3d"].shape == (65, 3)
+    assert 23.0 not in samples[0]["target_3d"][:, 1]
+    assert samples[0]["target_3d"][23, 1] == 91.0
     assert samples[0]["meta"]["sequence_id"] == "S1/Directions/54138969"
 
 
@@ -134,10 +136,13 @@ def test_h3wb_dataset_reads_npz_cache_with_causal_window(tmp_path):
     write_h3wb_cache(Path("tests/fixtures/h3wb_tiny.json"), cache)
     with np.load(cache, allow_pickle=True) as payload:
         assert {"inputs_2d", "targets_3d", "target_masks", "frame_ids", "sequence_ids", "metas"} <= set(payload.files)
+        assert payload["inputs_2d"].shape[-2:] == (65, 3)
+        assert payload["targets_3d"].shape[-2:] == (65, 3)
+        assert payload["target_masks"].shape[-1] == 65
     dataset = H3WBDataset(cache, window=3)
     sample = dataset[0]
-    assert sample["history_2d"].shape == (3, 133, 3)
-    assert sample["target_3d"].shape == (133, 3)
+    assert sample["history_2d"].shape == (3, 65, 3)
+    assert sample["target_3d"].shape == (65, 3)
 
 
 def test_h3wb_dataset_windows_are_sequence_local_and_sorted_by_frame(tmp_path):
@@ -182,22 +187,22 @@ def test_h3wb_dataset_allows_unordered_cache_for_window_one(tmp_path):
     cache = tmp_path / "unordered.npz"
     np.savez_compressed(
         cache,
-        inputs_2d=np.zeros((1, 133, 3), dtype=np.float32),
-        targets_3d=np.zeros((1, 133, 3), dtype=np.float32),
-        target_masks=np.ones((1, 133), dtype=bool),
+        inputs_2d=np.zeros((1, 65, 3), dtype=np.float32),
+        targets_3d=np.zeros((1, 65, 3), dtype=np.float32),
+        target_masks=np.ones((1, 65), dtype=bool),
         metas=np.asarray([{"source": "synthetic"}], dtype=object),
     )
 
-    assert H3WBDataset(cache, window=1)[0]["history_2d"].shape == (1, 133, 3)
+    assert H3WBDataset(cache, window=1)[0]["history_2d"].shape == (1, 65, 3)
 
 
 def test_h3wb_dataset_requires_sequence_and_frame_metadata_for_temporal_window(tmp_path):
     cache = tmp_path / "unordered.npz"
     np.savez_compressed(
         cache,
-        inputs_2d=np.zeros((1, 133, 3), dtype=np.float32),
-        targets_3d=np.zeros((1, 133, 3), dtype=np.float32),
-        target_masks=np.ones((1, 133), dtype=bool),
+        inputs_2d=np.zeros((1, 65, 3), dtype=np.float32),
+        targets_3d=np.zeros((1, 65, 3), dtype=np.float32),
+        target_masks=np.ones((1, 65), dtype=bool),
         metas=np.asarray([{"source": "synthetic"}], dtype=object),
     )
 
