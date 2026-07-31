@@ -266,6 +266,20 @@ def test_model_factory_rejects_unknown_model_type():
         build_model_from_config({"model": {"type": "transformer"}})
 
 
+@pytest.mark.parametrize(
+    "config_path",
+    [
+        Path("configs/h3wb_hrgcn_t1.yaml"),
+        Path("configs/h3wb_hrgcn_causal_t27.yaml"),
+    ],
+)
+def test_model_factory_rejects_legacy_hrgcn_configs(config_path):
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    with pytest.raises(ValueError, match=r"HRGCN.*133.*65-point migration"):
+        build_model_from_config(cfg)
+
+
 def test_evaluate_cli_defaults_to_validation_cache(tmp_path, monkeypatch, capsys):
     cfg = _training_config(tmp_path)
     config_path = tmp_path / "config.yaml"

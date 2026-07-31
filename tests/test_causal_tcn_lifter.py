@@ -1,6 +1,10 @@
+from pathlib import Path
+
 import pytest
 import torch
+import yaml
 
+from mypose.engine import build_model_from_config
 from mypose.models.causal_tcn_lifter import CausalTCNLifter
 
 
@@ -39,4 +43,28 @@ def test_causal_tcn_stream_matches_batch_last_frame():
         stepped = None
         for t in range(history.shape[1]):
             stepped = model.step(history[:, t])
+    torch.testing.assert_close(batch, stepped)
+
+
+@pytest.mark.parametrize(
+    "config_path",
+    [
+        Path("configs/h3wb_tcn_t27.yaml"),
+        Path("configs/h3wb_tcn_t81.yaml"),
+    ],
+)
+def test_configured_stream_matches_batch_after_exceeding_window(config_path):
+    torch.manual_seed(11)
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+    cfg["model"]["hidden_channels"] = 8
+    model = build_model_from_config(cfg).eval()
+    window = cfg["data"]["window"]
+    history = torch.randn(1, window + 2, 65, 3)
+
+    with torch.no_grad():
+        batch = model(history[:, -window:])
+        model.reset_stream()
+        for index in range(history.shape[1]):
+            stepped = model.step(history[:, index])
+
     torch.testing.assert_close(batch, stepped)

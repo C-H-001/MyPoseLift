@@ -45,6 +45,7 @@ class CausalTCNLifter(nn.Module):
         num_blocks: int = 4,
         kernel_size: int = 3,
         dropout: float = 0.1,
+        max_history: int | None = None,
     ) -> None:
         if num_keypoints != NUM_KEYPOINTS:
             raise ValueError(
@@ -62,6 +63,8 @@ class CausalTCNLifter(nn.Module):
             raise ValueError(f"kernel_size must be positive, got {kernel_size}")
         if not 0.0 <= dropout < 1.0:
             raise ValueError(f"dropout must be in [0, 1), got {dropout}")
+        if max_history is not None and max_history <= 0:
+            raise ValueError(f"max_history must be positive, got {max_history}")
         super().__init__()
         self.num_keypoints = num_keypoints
         self.in_channels = in_channels
@@ -83,6 +86,9 @@ class CausalTCNLifter(nn.Module):
             nn.Linear(hidden_channels, num_keypoints * 3),
         )
         self.receptive_field = 1 + (kernel_size - 1) * sum(dilations)
+        self.max_history = (
+            self.receptive_field if max_history is None else max_history
+        )
         self._stream: list[torch.Tensor] = []
 
     def _validate_history(self, history_2d: torch.Tensor) -> None:
@@ -121,5 +127,5 @@ class CausalTCNLifter(nn.Module):
                 f"got {tuple(frame_2d.shape)}"
             )
         self._stream.append(frame_2d.detach().clone())
-        self._stream = self._stream[-self.receptive_field :]
+        self._stream = self._stream[-self.max_history :]
         return self.forward(torch.stack(self._stream, dim=1))
