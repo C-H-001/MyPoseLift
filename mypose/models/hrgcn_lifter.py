@@ -55,9 +55,13 @@ class HRGCNLifter(nn.Module):
             else None
         )
         self.input = nn.Linear(in_channels, hidden_channels)
+        self.joint_embedding = nn.Parameter(torch.zeros(num_keypoints, hidden_channels))
         self.blocks = nn.ModuleList([GraphBlock(hidden_channels), GraphBlock(hidden_channels), GraphBlock(hidden_channels)])
-        self.body_head = nn.Linear(hidden_channels, 3)
-        self.fine_head = nn.Sequential(nn.Linear(hidden_channels, hidden_channels), nn.GELU(), nn.Linear(hidden_channels, 3))
+        self.output_head = nn.Sequential(
+            nn.Linear(hidden_channels, hidden_channels),
+            nn.GELU(),
+            nn.Linear(hidden_channels, 3),
+        )
 
     def forward(self, history_2d: torch.Tensor, mask: torch.Tensor | None = None) -> torch.Tensor:
         x = history_2d
@@ -67,13 +71,10 @@ class HRGCNLifter(nn.Module):
         return self.forward_frame(frame)
 
     def forward_frame(self, frame_2d: torch.Tensor) -> torch.Tensor:
-        h = self.input(frame_2d)
+        h = self.input(frame_2d) + self.joint_embedding[None, :, :]
         for block in self.blocks:
             h = block(h)
-        out = self.body_head(h)
-        fine_indices = list(range(23, 133))
-        out[:, fine_indices] = self.fine_head(h[:, fine_indices])
-        return out
+        return self.output_head(h)
 
     def reset_stream(self) -> None:
         if self.temporal is not None:

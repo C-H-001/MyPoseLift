@@ -21,8 +21,7 @@ COCO_ANNOTATION_FILENAMES = (
 )
 
 H3WB_ANNOTATION_FILENAMES = (
-    "2Dto3D_train.json",
-    "2Dto3D_test_2d.json",
+    "h3wb_train.npz",
 )
 
 COCO_WHOLEBODY_SOURCES = {
@@ -35,8 +34,10 @@ OPENXLAB_COCO_REPO = "OpenDataLab/COCO-WholeBody"
 
 H3WB_SOURCES = {
     "official_repo": "https://github.com/wholebody3d/wholebody3d",
-    "official_readme_downloads": "https://github.com/wholebody3d/wholebody3d#download",
+    "official_release": "https://github.com/wholebody3d/wholebody3d/releases/tag/h3wb",
 }
+
+H3WB_TRAIN_URL = "https://github.com/wholebody3d/wholebody3d/releases/download/h3wb/h3wb_train.npz"
 
 
 def download_file(url: str, dest: Path) -> None:
@@ -153,10 +154,11 @@ def download_h3wb(root: Path, no_verify: bool = False) -> None:
     annotation_root = root / "annotations"
     annotation_root.mkdir(parents=True, exist_ok=True)
     if no_verify:
-        print(f"Place 2Dto3D_train.json and 2Dto3D_test_2d.json under: {annotation_root}")
+        print(f"Place h3wb_train.npz under: {annotation_root}")
         for name, url in H3WB_SOURCES.items():
             print(f"- {name}: {url}")
     else:
+        download_file(H3WB_TRAIN_URL, annotation_root / "h3wb_train.npz")
         _verify_expected_files(annotation_root, H3WB_ANNOTATION_FILENAMES, H3WB_SOURCES, "H3WB")
 
 

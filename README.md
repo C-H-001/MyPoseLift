@@ -25,8 +25,7 @@ data/
   raw/
     h3wb/
       annotations/
-        2Dto3D_train.json
-        2Dto3D_test_2d.json
+        h3wb_train.npz
     coco-wholebody/
       annotations/
         coco_wholebody_train_v1.0.json
@@ -46,7 +45,7 @@ downloaded. Training does not read raw JSON directly; it reads the prepared
 ```bash
 python tools/download_datasets.py --dataset coco-wholebody --root data/raw --with-images
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/h3wb_train.npz --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 Downloaded datasets and generated caches belong under `data/`, which is not
@@ -54,7 +53,10 @@ committed to git. H3WB does not publish a validation split, so preparation
 uses deterministic sequence-level folds. Report all five held-out folds for
 cross-validation results; a single fold is suitable for development only.
 
-H3WB samples must contain the official whole-body fields:
+The current official H3WB release publishes `h3wb_train.npz`, whose
+`train_data` tree contains per-camera `pose_2d` and `camera_3d` arrays. The
+preparation tool also keeps compatibility with the older JSON shape where
+samples contain:
 
 ```text
 keypoints_2d
@@ -81,7 +83,7 @@ To use server paths, write caches wherever you want and point the config at
 those files:
 
 ```bash
-python tools/prepare_h3wb.py --annotations /data/H3WB/annotations/2Dto3D_train.json --train-out /data/MyPoseLift/processed/h3wb_train_fold0.npz --val-out /data/MyPoseLift/processed/h3wb_val_fold0.npz --num-folds 5 --val-fold 0
+python tools/prepare_h3wb.py --annotations /data/H3WB/annotations/h3wb_train.npz --train-out /data/MyPoseLift/processed/h3wb_train_fold0.npz --val-out /data/MyPoseLift/processed/h3wb_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 ```yaml

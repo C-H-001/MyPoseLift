@@ -39,25 +39,32 @@ Use `--no-verify` only to create the directory structure before placing files; i
 
 Official repository: https://github.com/wholebody3d/wholebody3d
 
-H3WB extends Human3.6M to 133 whole-body 3D keypoints with the same skeleton layout as COCO-WholeBody. The official README provides Google Drive downloads. `2Dto3D_train.json` is used for train/validation and `2Dto3D_test_2d.json` is used for the test leaderboard. The H3WB project is MIT licensed; images follow the Human3.6M license.
+H3WB extends Human3.6M to 133 whole-body 3D keypoints with the same skeleton
+layout as COCO-WholeBody. The current public release provides
+`h3wb_train.npz` for train/validation and separate task-specific test files for
+leaderboard evaluation. The H3WB project is MIT licensed; images follow the
+Human3.6M license.
 
 Expected files for this project:
 
 ```text
-data/raw/h3wb/annotations/2Dto3D_train.json
-data/raw/h3wb/annotations/2Dto3D_test_2d.json
+data/raw/h3wb/annotations/h3wb_train.npz
 ```
 
 Commands:
 
 ```bash
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/2Dto3D_train.json --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/h3wb_train.npz --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
-The downloader verifies both expected JSON files and prints the official Google Drive link when either is missing. The preparation command creates the cache consumed by the training configurations in `configs/`.
+The downloader actively fetches `h3wb_train.npz` from the official GitHub
+release. The preparation command creates the cache consumed by the training
+configurations in `configs/`.
 
-The parser consumes the official `keypoints_2d` and `keypoints_3d` fields.
+For the release NPZ, the parser consumes per-camera `pose_2d` and `camera_3d`
+arrays from `train_data`. For older JSON annotations, it consumes the official
+`keypoints_2d` and `keypoints_3d` fields.
 Pixel coordinates are normalized using per-sample `image_width` /
 `image_height`, `width` / `height`, or `image_size` metadata. When those are
 absent, the four documented Human3.6M camera IDs use their 1000-pixel camera

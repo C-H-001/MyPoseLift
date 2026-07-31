@@ -19,6 +19,20 @@ def test_framewise_lifter_outputs_133_3():
     assert y.shape == (2, 133, 3)
 
 
+def test_lifter_has_learned_joint_identity():
+    model = HRGCNLifter(use_temporal=False, hidden_channels=8)
+
+    assert tuple(model.joint_embedding.shape) == (133, 8)
+    assert model.joint_embedding.requires_grad
+
+
+def test_lifter_uses_nonlinear_output_head_for_all_joints():
+    model = HRGCNLifter(use_temporal=False, hidden_channels=8)
+
+    assert isinstance(model.output_head, torch.nn.Sequential)
+    assert any(isinstance(layer, torch.nn.GELU) for layer in model.output_head)
+
+
 def test_temporal_lifter_outputs_133_3_on_cpu():
     model = HRGCNLifter(use_temporal=True, hidden_channels=32)
     x = torch.randn(2, 5, 133, 3)

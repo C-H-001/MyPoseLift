@@ -6,6 +6,7 @@ import pytest
 
 from mypose.data.h3wb import (
     H3WBDataset,
+    load_h3wb_annotations,
     load_h3wb_json,
     write_h3wb_cache,
     write_h3wb_fold_caches,
@@ -82,6 +83,39 @@ def test_load_h3wb_json_uses_known_h36m_camera_resolution_without_image_metadata
     sample = load_h3wb_json(annotation_file)[0]
 
     np.testing.assert_allclose(sample["history_2d"][0, 0, :2], [0.0, 0.0])
+
+
+def test_load_h3wb_annotations_reads_official_release_npz(tmp_path):
+    pose_2d = np.zeros((2, 133, 2), dtype=np.float32)
+    pose_2d[:, :, 0] = 500.0
+    pose_2d[:, :, 1] = 501.0
+    camera_3d = np.zeros((2, 133, 3), dtype=np.float32)
+    camera_3d[:, :, 1] = np.arange(133, dtype=np.float32)[None, :]
+    camera_3d[:, 11] = np.array([-100.0, 0.0, 1000.0], dtype=np.float32)
+    camera_3d[:, 12] = np.array([100.0, 0.0, 1000.0], dtype=np.float32)
+    annotation_file = tmp_path / "h3wb_train.npz"
+    np.savez_compressed(
+        annotation_file,
+        train_data={
+            "S1": {
+                "Directions": {
+                    "frame_id": np.asarray(["0001", "0002"]),
+                    "54138969": {
+                        "pose_2d": pose_2d,
+                        "camera_3d": camera_3d,
+                        "sample_id": np.asarray([1, 2]),
+                    },
+                }
+            }
+        },
+    )
+
+    samples = load_h3wb_annotations(annotation_file)
+
+    assert len(samples) == 2
+    assert samples[0]["history_2d"].shape == (1, 133, 3)
+    assert samples[0]["target_3d"].shape == (133, 3)
+    assert samples[0]["meta"]["sequence_id"] == "S1/Directions/54138969"
 
 
 def test_load_h3wb_json_rejects_missing_normalization_basis(tmp_path):

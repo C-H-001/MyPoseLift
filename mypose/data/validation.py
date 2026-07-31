@@ -54,5 +54,5 @@ def validate_sample(sample: dict) -> None:
     _require_finite("history_2d", history)
     _require_finite("target_3d", target)
     root = compute_pelvis_root(target)
-    if not np.allclose(root, np.zeros_like(root), atol=1e-6):
+    if not np.allclose(root, np.zeros_like(root), atol=1e-3):
         raise ValueError("target_3d is expected to be pelvis-rooted (pelvis midpoint at origin)")

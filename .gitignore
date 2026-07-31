@@ -12,6 +12,7 @@ data/processed/
 data/cache/
 checkpoints/
 runs/
+reports/
 *.pt
 *.pth
 *.npz

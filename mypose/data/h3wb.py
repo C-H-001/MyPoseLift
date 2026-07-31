@@ -150,6 +150,84 @@ def load_h3wb_json(path: Path) -> list[dict]:
     return samples
 
 
+def load_h3wb_npz(path: Path) -> list[dict]:
+    samples = []
+    with np.load(path, allow_pickle=True) as payload:
+        if "train_data" not in payload.files:
+            raise ValueError("H3WB NPZ must contain official 'train_data'")
+        train_data = payload["train_data"].item()
+    if not isinstance(train_data, dict):
+        raise ValueError("H3WB NPZ train_data must be a nested mapping")
+    for subject, actions in train_data.items():
+        for action, item in actions.items():
+            if not isinstance(item, dict) or "frame_id" not in item:
+                raise ValueError(f"H3WB sequence {subject}/{action} missing frame_id")
+            frame_ids = item["frame_id"]
+            camera_ids = [
+                key for key, value in item.items()
+                if isinstance(value, dict) and "pose_2d" in value and "camera_3d" in value
+            ]
+            if not camera_ids:
+                raise ValueError(f"H3WB sequence {subject}/{action} has no camera data")
+            for camera in sorted(camera_ids):
+                camera_item = item[camera]
+                pose_2d = np.asarray(camera_item["pose_2d"], dtype=np.float32)
+                camera_3d = np.asarray(camera_item["camera_3d"], dtype=np.float32)
+                if pose_2d.ndim != 3 or pose_2d.shape[1:] != (133, 2):
+                    raise ValueError(
+                        f"H3WB {subject}/{action}/{camera} pose_2d must have shape (N, 133, 2)"
+                    )
+                if camera_3d.shape != (pose_2d.shape[0], 133, 3):
+                    raise ValueError(
+                        f"H3WB {subject}/{action}/{camera} camera_3d must have shape (N, 133, 3)"
+                    )
+                if len(frame_ids) != pose_2d.shape[0]:
+                    raise ValueError(
+                        f"H3WB {subject}/{action}/{camera} frame count mismatch"
+                    )
+                width, height = _image_size({"camera": camera})
+                sequence_id = f"{subject}/{action}/{camera}"
+                sample_ids = camera_item.get("sample_id")
+                for index in range(pose_2d.shape[0]):
+                    mask = np.ones((133,), dtype=bool)
+                    xyc = np.concatenate(
+                        [pose_2d[index], np.ones((133, 1), dtype=np.float32)],
+                        axis=1,
+                    )
+                    norm_2d = normalize_2d_image(xyc, (width, height))
+                    rel_3d, _ = make_root_relative(camera_3d[index])
+                    sample_id = (
+                        int(sample_ids[index])
+                        if sample_ids is not None and len(sample_ids) > index
+                        else f"{sequence_id}/{frame_ids[index]}"
+                    )
+                    sample = {
+                        "history_2d": norm_2d[None, :, :],
+                        "target_3d": rel_3d,
+                        "target_mask": mask,
+                        "meta": {
+                            "source": "h3wb_release_npz",
+                            "sample_id": sample_id,
+                            "frame_id": frame_ids[index],
+                            "sequence_id": sequence_id,
+                            "image_path": "",
+                            "subject": subject,
+                            "action": action,
+                            "camera": camera,
+                        },
+                    }
+                    validate_sample(sample)
+                    samples.append(sample)
+    return samples
+
+
+def load_h3wb_annotations(path: Path) -> list[dict]:
+    path = Path(path)
+    if path.suffix.lower() == ".npz":
+        return load_h3wb_npz(path)
+    return load_h3wb_json(path)
+
+
 def _write_samples_cache(samples: list[dict], out_file: Path) -> None:
     if not samples:
         raise ValueError("cannot write an empty H3WB cache")
@@ -167,7 +245,7 @@ def _write_samples_cache(samples: list[dict], out_file: Path) -> None:
 
 
 def write_h3wb_cache(annotation_file: Path, out_file: Path) -> None:
-    _write_samples_cache(load_h3wb_json(annotation_file), out_file)
+    _write_samples_cache(load_h3wb_annotations(annotation_file), out_file)
 
 
 def write_h3wb_fold_caches(
@@ -178,7 +256,7 @@ def write_h3wb_fold_caches(
     num_folds: int = 5,
     val_fold: int = 0,
 ) -> None:
-    samples = load_h3wb_json(annotation_file)
+    samples = load_h3wb_annotations(annotation_file)
     if any(sample["meta"]["sequence_id"] in (None, "") for sample in samples):
         raise ValueError("fold preparation requires sequence metadata for every sample")
     sequence_ids = sorted({str(sample["meta"]["sequence_id"]) for sample in samples})
