@@ -18,6 +18,31 @@ when running the module, training, and inspection commands from this checkout.
 
 See [docs/datasets.md](docs/datasets.md) for licensing and source details.
 
+The recommended local layout is:
+
+```text
+data/
+  raw/
+    h3wb/
+      annotations/
+        2Dto3D_train.json
+        2Dto3D_test_2d.json
+    coco-wholebody/
+      annotations/
+        coco_wholebody_train_v1.0.json
+        coco_wholebody_val_v1.0.json
+      images/
+        train2017.zip
+        val2017.zip
+  processed/
+    h3wb_2dto3d_train_fold0.npz
+    h3wb_2dto3d_val_fold0.npz
+```
+
+`tools/download_datasets.py --root` controls where raw datasets are checked or
+downloaded. Training does not read raw JSON directly; it reads the prepared
+`.npz` caches configured by `data.train_cache` and `data.val_cache`.
+
 ```bash
 python tools/download_datasets.py --dataset coco-wholebody --root data/raw --with-images
 python tools/download_datasets.py --dataset h3wb --root data/raw
@@ -28,6 +53,43 @@ Downloaded datasets and generated caches belong under `data/`, which is not
 committed to git. H3WB does not publish a validation split, so preparation
 uses deterministic sequence-level folds. Report all five held-out folds for
 cross-validation results; a single fold is suitable for development only.
+
+H3WB samples must contain the official whole-body fields:
+
+```text
+keypoints_2d
+keypoints_3d
+```
+
+For temporal training (`window > 1`), every sample must also provide sequence
+and frame metadata. The parser accepts explicit `sequence_id` or `video_id`, or
+derives a sequence from `subject + action + camera`. It accepts `frame_id`,
+`frame_idx`, `frame_index`, or a sortable frame name in `image_path`.
+
+2D pixel normalization requires image dimensions from one of:
+
+```text
+image_width + image_height
+width + height
+image_size
+```
+
+If these fields are absent, only recognized Human3.6M camera IDs are accepted.
+Bounding boxes are never treated as image dimensions.
+
+To use server paths, write caches wherever you want and point the config at
+those files:
+
+```bash
+python tools/prepare_h3wb.py --annotations /data/H3WB/annotations/2Dto3D_train.json --train-out /data/MyPoseLift/processed/h3wb_train_fold0.npz --val-out /data/MyPoseLift/processed/h3wb_val_fold0.npz --num-folds 5 --val-fold 0
+```
+
+```yaml
+data:
+  train_cache: /data/MyPoseLift/processed/h3wb_train_fold0.npz
+  val_cache: /data/MyPoseLift/processed/h3wb_val_fold0.npz
+  window: 27
+```
 
 ## Train
 
@@ -59,7 +121,7 @@ explicit override for smoke tests or another prepared fold.
 ## Inspect
 
 ```bash
-python tools/inspect_sample.py --cache data/processed/h3wb_2dto3d_train.npz --index 0
+python tools/inspect_sample.py --cache data/processed/h3wb_2dto3d_train_fold0.npz --index 0
 ```
 
 ## Inference
