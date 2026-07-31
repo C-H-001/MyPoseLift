@@ -87,13 +87,13 @@ To use server paths, write caches wherever you want and point the config at
 those files:
 
 ```bash
-python tools/prepare_h3wb.py --annotations /data/H3WB/annotations/h3wb_train.npz --train-out /data/MyPoseLift/processed/h3wb_train_fold0.npz --val-out /data/MyPoseLift/processed/h3wb_val_fold0.npz --num-folds 5 --val-fold 0
+python tools/prepare_h3wb.py --annotations /data/H3WB/annotations/h3wb_train.npz --train-out /data/MyPoseLift/processed/h3wb_65_train_fold0.npz --val-out /data/MyPoseLift/processed/h3wb_65_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 ```yaml
 data:
-  train_cache: /data/MyPoseLift/processed/h3wb_train_fold0.npz
-  val_cache: /data/MyPoseLift/processed/h3wb_val_fold0.npz
+  train_cache: /data/MyPoseLift/processed/h3wb_65_train_fold0.npz
+  val_cache: /data/MyPoseLift/processed/h3wb_65_val_fold0.npz
   window: 27
 ```
 
@@ -113,8 +113,7 @@ improves. Resume from the epoch after a saved checkpoint with:
 python -m mypose.engine.train --config configs/h3wb_tcn_t81.yaml --resume checkpoints/h3wb_tcn_t81/last.pt
 ```
 
-The causal T=27 config uses a strictly left-padded 27-frame temporal kernel,
-so its configured receptive field is genuinely 27 frames.
+The causal T=27 config uses a strictly left-padded 27-frame input/history window.
 
 ## Evaluate
 

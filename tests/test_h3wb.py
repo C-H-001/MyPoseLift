@@ -262,3 +262,57 @@ def test_write_h3wb_fold_caches_is_deterministic_and_sequence_disjoint(tmp_path)
     )
     with np.load(second_val, allow_pickle=True) as second_payload:
         assert set(second_payload["sequence_ids"].tolist()) == val_sequences
+
+
+def test_h3wb_release_fold_caches_keep_multiview_motion_groups_together(tmp_path):
+    pose_2d = np.zeros((2, 133, 2), dtype=np.float32)
+    camera_3d = np.zeros((2, 133, 3), dtype=np.float32)
+    camera_3d[:, 11] = [-100.0, 0.0, 1000.0]
+    camera_3d[:, 12] = [100.0, 0.0, 1000.0]
+    camera = {"pose_2d": pose_2d, "camera_3d": camera_3d}
+    annotation_file = tmp_path / "multiview_release.npz"
+    np.savez_compressed(
+        annotation_file,
+        train_data={
+            "S1": {
+                "Walk": {
+                    "frame_id": np.asarray([10, 11]),
+                    "54138969": camera,
+                    "55011271": camera,
+                }
+            },
+            "S2": {
+                "Run": {
+                    "frame_id": np.asarray([10, 11]),
+                    "54138969": camera,
+                    "55011271": camera,
+                }
+            },
+        },
+    )
+    train_cache = tmp_path / "train.npz"
+    val_cache = tmp_path / "val.npz"
+
+    write_h3wb_fold_caches(
+        annotation_file, train_cache, val_cache, num_folds=2, val_fold=0
+    )
+
+    with np.load(train_cache, allow_pickle=True) as payload:
+        train_metas = [dict(meta) for meta in payload["metas"]]
+    with np.load(val_cache, allow_pickle=True) as payload:
+        val_metas = [dict(meta) for meta in payload["metas"]]
+
+    train_groups = {(meta["subject"], meta["action"]) for meta in train_metas}
+    val_groups = {(meta["subject"], meta["action"]) for meta in val_metas}
+    train_frames = {
+        (meta["subject"], meta["action"], meta["frame_id"])
+        for meta in train_metas
+    }
+    val_frames = {
+        (meta["subject"], meta["action"], meta["frame_id"])
+        for meta in val_metas
+    }
+
+    assert train_groups.isdisjoint(val_groups)
+    assert train_groups | val_groups == {("S1", "Walk"), ("S2", "Run")}
+    assert train_frames.isdisjoint(val_frames)

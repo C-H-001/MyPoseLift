@@ -148,6 +148,9 @@ def load_h3wb_json(path: Path) -> list[dict]:
                 "frame_id": _frame_id(item),
                 "sequence_id": _sequence_id(item),
                 "image_path": item.get("image_path", ""),
+                "subject": item.get("subject"),
+                "action": item.get("action"),
+                "camera": item.get("camera", item.get("camera_id")),
             },
         }
         validate_sample(sample)
@@ -257,6 +260,15 @@ def write_h3wb_cache(annotation_file: Path, out_file: Path) -> None:
     _write_samples_cache(load_h3wb_annotations(annotation_file), out_file)
 
 
+def _fold_group(sample: dict) -> tuple[str, ...]:
+    meta = sample["meta"]
+    subject = meta.get("subject")
+    action = meta.get("action")
+    if subject not in (None, "") and action not in (None, ""):
+        return ("motion", str(subject), str(action))
+    return ("sequence", str(meta["sequence_id"]))
+
+
 def write_h3wb_fold_caches(
     annotation_file: Path,
     train_out: Path,
@@ -268,26 +280,26 @@ def write_h3wb_fold_caches(
     samples = load_h3wb_annotations(annotation_file)
     if any(sample["meta"]["sequence_id"] in (None, "") for sample in samples):
         raise ValueError("fold preparation requires sequence metadata for every sample")
-    sequence_ids = sorted({str(sample["meta"]["sequence_id"]) for sample in samples})
-    if num_folds < 2 or num_folds > len(sequence_ids):
+    fold_groups = sorted({_fold_group(sample) for sample in samples})
+    if num_folds < 2 or num_folds > len(fold_groups):
         raise ValueError(
-            f"num_folds must be between 2 and the {len(sequence_ids)} available sequences"
+            f"num_folds must be between 2 and the {len(fold_groups)} available motion groups"
         )
     if val_fold < 0 or val_fold >= num_folds:
         raise ValueError(f"val_fold must be in [0, {num_folds}), got {val_fold}")
-    fold_by_sequence = {
-        sequence_id: index % num_folds
-        for index, sequence_id in enumerate(sequence_ids)
+    fold_by_group = {
+        group: index % num_folds
+        for index, group in enumerate(fold_groups)
     }
     train_samples = [
         sample
         for sample in samples
-        if fold_by_sequence[str(sample["meta"]["sequence_id"])] != val_fold
+        if fold_by_group[_fold_group(sample)] != val_fold
     ]
     val_samples = [
         sample
         for sample in samples
-        if fold_by_sequence[str(sample["meta"]["sequence_id"])] == val_fold
+        if fold_by_group[_fold_group(sample)] == val_fold
     ]
     _write_samples_cache(train_samples, train_out)
     _write_samples_cache(val_samples, val_out)

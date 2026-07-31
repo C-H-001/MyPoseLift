@@ -46,6 +46,36 @@ def test_causal_tcn_stream_matches_batch_last_frame():
     torch.testing.assert_close(batch, stepped)
 
 
+def test_causal_tcn_first_stream_step_matches_repeated_first_frame_window():
+    torch.manual_seed(17)
+    model = CausalTCNLifter(hidden_channels=16, num_blocks=2, max_history=5).eval()
+    first_frame = torch.randn(1, 65, 3)
+
+    with torch.no_grad():
+        expected = model(first_frame[:, None].repeat(1, 5, 1, 1))
+        model.reset_stream()
+        actual = model.step(first_frame)
+
+    torch.testing.assert_close(actual, expected)
+
+
+def test_causal_tcn_partial_stream_matches_repeated_first_frame_history():
+    torch.manual_seed(19)
+    model = CausalTCNLifter(hidden_channels=16, num_blocks=2, max_history=5).eval()
+    observed = torch.randn(1, 3, 65, 3)
+    expected_history = torch.cat(
+        [observed[:, :1].repeat(1, 2, 1, 1), observed], dim=1
+    )
+
+    with torch.no_grad():
+        expected = model(expected_history)
+        model.reset_stream()
+        for index in range(observed.shape[1]):
+            actual = model.step(observed[:, index])
+
+    torch.testing.assert_close(actual, expected)
+
+
 @pytest.mark.parametrize(
     "config_path",
     [

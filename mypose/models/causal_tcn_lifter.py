@@ -128,4 +128,13 @@ class CausalTCNLifter(nn.Module):
             )
         self._stream.append(frame_2d.detach().clone())
         self._stream = self._stream[-self.max_history :]
-        return self.forward(torch.stack(self._stream, dim=1))
+        history = torch.stack(self._stream, dim=1)
+        if history.shape[1] < self.max_history:
+            history = torch.cat(
+                [
+                    history[:, :1].repeat(1, self.max_history - history.shape[1], 1, 1),
+                    history,
+                ],
+                dim=1,
+            )
+        return self.forward(history)

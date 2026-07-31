@@ -1,6 +1,7 @@
 import numpy as np
 
 from mypose.data.keypoints65 import (
+    COCO65_EDGES,
     NUM_KEYPOINTS,
     ORIGINAL_TO_65,
     get_part_indices,
@@ -22,6 +23,14 @@ def test_65_parts_include_head3_and_no_dense_face():
     assert get_part_indices("head3") == [0, 1, 2]
     assert get_part_indices("left_hand") == list(range(23, 44))
     assert get_part_indices("right_hand") == list(range(44, 65))
+
+
+def test_65_edges_include_compact_hand_chains_within_bounds():
+    assert (23, 24) in COCO65_EDGES
+    assert (40, 41) in COCO65_EDGES
+    assert (44, 45) in COCO65_EDGES
+    assert (63, 64) in COCO65_EDGES
+    assert all(0 <= index < NUM_KEYPOINTS for edge in COCO65_EDGES for index in edge)
 
 
 def test_remap_133_to_65_preserves_expected_indices():
