@@ -17,7 +17,8 @@ python tools/prepare_coco_wholebody.py --annotations data/raw/coco-wholebody/ann
 ```
 
 The preparation command converts the official annotation JSON into the
-project's cached 133-keypoint representation. Keep downloaded images,
+project's cached 65-keypoint representation. Dense face points are removed;
+body indices 0, 1, and 2 retain the nose, left eye, and right eye. Keep downloaded images,
 annotations, and generated caches under `data/`; dataset files are not part of
 the repository.
 
@@ -55,12 +56,22 @@ Commands:
 
 ```bash
 python tools/download_datasets.py --dataset h3wb --root data/raw
-python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/h3wb_train.npz --train-out data/processed/h3wb_2dto3d_train_fold0.npz --val-out data/processed/h3wb_2dto3d_val_fold0.npz --num-folds 5 --val-fold 0
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/h3wb_train.npz --train-out data/processed/h3wb_65_train_fold0.npz --val-out data/processed/h3wb_65_val_fold0.npz --num-folds 5 --val-fold 0
 ```
 
 The downloader actively fetches `h3wb_train.npz` from the official GitHub
-release. The preparation command creates the cache consumed by the training
+release. The preparation command creates the 65-point cache consumed by the training
 configurations in `configs/`.
+
+## Causal TCN workflow
+
+```bash
+python tools/download_datasets.py --dataset h3wb --root data/raw
+python tools/prepare_h3wb.py --annotations data/raw/h3wb/annotations/h3wb_train.npz --train-out data/processed/h3wb_65_train_fold0.npz --val-out data/processed/h3wb_65_val_fold0.npz --num-folds 5 --val-fold 0
+python -m mypose.engine.train --config configs/h3wb_tcn_t81.yaml
+python -m mypose.engine.evaluate --config configs/h3wb_tcn_t81.yaml --checkpoint checkpoints/h3wb_tcn_t81/best.pt
+python tools/plot_prediction.py --config configs/h3wb_tcn_t81.yaml --checkpoint checkpoints/h3wb_tcn_t81/best.pt --index 100 --out reports/h3wb_tcn_t81_fold0_gt_pred.png
+```
 
 For the release NPZ, the parser consumes per-camera `pose_2d` and `camera_3d`
 arrays from `train_data`. For older JSON annotations, it consumes the official
