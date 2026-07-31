@@ -21,9 +21,9 @@ class TinyPoseDataset:
 
     def __getitem__(self, index):
         return {
-            "history_2d": torch.zeros(1, 133, 3),
-            "target_3d": torch.zeros(133, 3),
-            "target_mask": torch.ones(133, dtype=torch.bool),
+            "history_2d": torch.zeros(1, 65, 3),
+            "target_3d": torch.zeros(65, 3),
+            "target_mask": torch.ones(65, dtype=torch.bool),
             "meta": {"index": index},
         }
 
@@ -40,7 +40,7 @@ def test_checkpoint_roundtrip(tmp_path):
 
 def test_evaluate_returns_part_metrics():
     loader = DataLoader(TinyPoseDataset(), batch_size=2)
-    model = HRGCNLifter(hidden_channels=16)
+    model = IdentityPoseModel()
     metrics = evaluate(model, loader, device=torch.device("cpu"))
     assert "MPJPE_whole" in metrics
     assert "MPJPE_hands_wrist_aligned" in metrics
@@ -52,13 +52,13 @@ class UnevenMetricDataset:
 
     def __getitem__(self, index):
         error = 1.0 if index < 2 else 3.0
-        history = torch.zeros(1, 133, 3)
+        history = torch.zeros(1, 65, 3)
         history[..., 0] = error
-        mask = torch.zeros(133, dtype=torch.bool)
+        mask = torch.zeros(65, dtype=torch.bool)
         mask[: 2 if index == 0 else 1] = True
         return {
             "history_2d": history,
-            "target_3d": torch.zeros(133, 3),
+            "target_3d": torch.zeros(65, 3),
             "target_mask": mask,
         }
 
@@ -74,38 +74,37 @@ def test_evaluate_weights_batches_by_valid_points():
     assert metrics["MPJPE_whole"] == pytest.approx(6.0 / 4.0)
 
 
-class FaceAnchorDataset:
+class Head3Dataset:
     def __len__(self):
         return 1
 
     def __getitem__(self, index):
-        history = torch.zeros(1, 133, 3)
-        history[:, 0, 0] = 2.0
-        history[:, 23:91, 0] = 5.0
+        history = torch.zeros(1, 65, 3)
+        history[:, :3, 0] = 2.0
         return {
             "history_2d": history,
-            "target_3d": torch.zeros(133, 3),
-            "target_mask": torch.ones(133, dtype=torch.bool),
+            "target_3d": torch.zeros(65, 3),
+            "target_mask": torch.ones(65, dtype=torch.bool),
         }
 
 
-def test_evaluate_face_metric_aligns_to_coco_body_nose_index_zero():
-    loader = DataLoader(FaceAnchorDataset(), batch_size=1)
+def test_evaluate_reports_head3_metric():
+    loader = DataLoader(Head3Dataset(), batch_size=1)
 
     metrics = evaluate(IdentityPoseModel(), loader, device=torch.device("cpu"))
 
-    assert metrics["MPJPE_face_nose_aligned"] == 3.0
+    assert metrics["MPJPE_head3"] == 2.0
 
 
 def _write_pose_cache(path: Path, target_offset: float) -> None:
-    target = np.full((1, 133, 3), target_offset, dtype=np.float32)
+    target = np.full((1, 65, 3), target_offset, dtype=np.float32)
     target[:, 11] = [-1.0, 0.0, 0.0]
     target[:, 12] = [1.0, 0.0, 0.0]
     np.savez_compressed(
         path,
-        inputs_2d=np.zeros((1, 133, 3), dtype=np.float32),
+        inputs_2d=np.zeros((1, 65, 3), dtype=np.float32),
         targets_3d=target,
-        target_masks=np.ones((1, 133), dtype=bool),
+        target_masks=np.ones((1, 65), dtype=bool),
         metas=np.asarray([{"source": "synthetic"}], dtype=object),
     )
 
@@ -144,15 +143,34 @@ def _training_config(tmp_path: Path) -> dict:
     }
 
 
-def test_training_evaluates_validation_cache_and_saves_last_and_best(tmp_path):
+class TinyTrainablePoseModel(torch.nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.offset = torch.nn.Parameter(torch.zeros(()))
+
+    def forward(self, history_2d):
+        return history_2d[:, -1] + self.offset
+
+
+def _use_tiny_training_model(monkeypatch) -> None:
+    monkeypatch.setattr(
+        "mypose.engine.train._model_from_config",
+        lambda cfg: TinyTrainablePoseModel(),
+    )
+
+
+def test_training_evaluates_validation_cache_and_saves_last_and_best(
+    tmp_path, monkeypatch
+):
     cfg = _training_config(tmp_path)
+    _use_tiny_training_model(monkeypatch)
 
     train_from_config(cfg)
 
     out_dir = Path(cfg["train"]["out_dir"])
     assert (out_dir / "last.pt").is_file()
     assert (out_dir / "best.pt").is_file()
-    model = HRGCNLifter(hidden_channels=4)
+    model = TinyTrainablePoseModel()
     state = load_checkpoint(out_dir / "last.pt", model)
     val_metrics = evaluate(
         model,
@@ -172,15 +190,16 @@ def test_training_evaluates_validation_cache_and_saves_last_and_best(tmp_path):
     )
 
 
-def test_training_resume_continues_after_checkpoint_epoch(tmp_path):
+def test_training_resume_continues_after_checkpoint_epoch(tmp_path, monkeypatch):
     cfg = _training_config(tmp_path)
+    _use_tiny_training_model(monkeypatch)
     train_from_config(cfg)
     checkpoint = Path(cfg["train"]["out_dir"]) / "last.pt"
     cfg["train"]["epochs"] = 2
 
     train_from_config(cfg, resume=checkpoint)
 
-    model = HRGCNLifter(hidden_channels=4)
+    model = TinyTrainablePoseModel()
     state = load_checkpoint(checkpoint, model)
     assert state["epoch"] == 1
 
@@ -217,13 +236,17 @@ def test_evaluate_cli_defaults_to_validation_cache(tmp_path, monkeypatch, capsys
     config_path = tmp_path / "config.yaml"
     config_path.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     checkpoint = tmp_path / "model.pt"
-    model = HRGCNLifter(hidden_channels=4)
+    model = TinyTrainablePoseModel()
     optimizer = torch.optim.AdamW(model.parameters())
     save_checkpoint(checkpoint, model, optimizer, epoch=0, metrics={})
     expected = evaluate(
         model,
         DataLoader(H3WBDataset(Path(cfg["data"]["val_cache"]), window=1)),
         torch.device("cpu"),
+    )
+    monkeypatch.setattr(
+        "mypose.engine.evaluate.HRGCNLifter",
+        lambda **kwargs: TinyTrainablePoseModel(),
     )
     monkeypatch.setattr(
         sys,

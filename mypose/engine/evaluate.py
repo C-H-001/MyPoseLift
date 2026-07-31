@@ -8,7 +8,7 @@ import yaml
 from torch.utils.data import DataLoader
 
 from mypose.data.h3wb import H3WBDataset
-from mypose.data.keypoints133 import get_part_indices
+from mypose.data.keypoints65 import NUM_KEYPOINTS, get_part_indices
 from mypose.engine.checkpoint import load_checkpoint
 from mypose.models.hrgcn_lifter import HRGCNLifter
 from mypose.utils.metrics import canonicalize_mask
@@ -48,8 +48,7 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
             "MPJPE_whole",
             "MPJPE_body",
             "MPJPE_feet",
-            "MPJPE_face",
-            "MPJPE_face_nose_aligned",
+            "MPJPE_head3",
             "MPJPE_left_hand",
             "MPJPE_right_hand",
             "MPJPE_hands_wrist_aligned",
@@ -66,13 +65,15 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
         target = batch["target_3d"].to(device=device, dtype=torch.float32)
         mask = canonicalize_mask(batch["target_mask"], target)
         pred = model(history)
-        accumulate("MPJPE_whole", _metric_sum_count(pred, target, mask, list(range(133))))
+        accumulate(
+            "MPJPE_whole",
+            _metric_sum_count(pred, target, mask, list(range(NUM_KEYPOINTS))),
+        )
         accumulate("MPJPE_body", _metric_sum_count(pred, target, mask, get_part_indices("body")))
         accumulate("MPJPE_feet", _metric_sum_count(pred, target, mask, get_part_indices("foot")))
-        accumulate("MPJPE_face", _metric_sum_count(pred, target, mask, get_part_indices("face")))
         accumulate(
-            "MPJPE_face_nose_aligned",
-            _metric_sum_count(pred, target, mask, list(range(23, 91)), anchor_index=0),
+            "MPJPE_head3",
+            _metric_sum_count(pred, target, mask, get_part_indices("head3")),
         )
         accumulate(
             "MPJPE_left_hand",
@@ -82,8 +83,12 @@ def evaluate(model: torch.nn.Module, dataloader, device: torch.device) -> dict[s
             "MPJPE_right_hand",
             _metric_sum_count(pred, target, mask, get_part_indices("right_hand")),
         )
-        left = _metric_sum_count(pred, target, mask, list(range(91, 112)), anchor_index=91)
-        right = _metric_sum_count(pred, target, mask, list(range(112, 133)), anchor_index=112)
+        left = _metric_sum_count(
+            pred, target, mask, get_part_indices("left_hand"), anchor_index=23
+        )
+        right = _metric_sum_count(
+            pred, target, mask, get_part_indices("right_hand"), anchor_index=44
+        )
         accumulate(
             "MPJPE_hands_wrist_aligned",
             (left[0] + right[0], left[1] + right[1]),

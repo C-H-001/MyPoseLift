@@ -4,7 +4,7 @@ from collections.abc import Sequence
 
 import torch
 
-from mypose.data.keypoints133 import get_part_indices
+from mypose.data.keypoints65 import get_part_indices
 
 
 def canonicalize_mask(mask: torch.Tensor | None, pred: torch.Tensor) -> torch.Tensor:
