@@ -9,9 +9,9 @@ import yaml
 from torch.utils.data import DataLoader
 
 from mypose.data.h3wb import H3WBDataset
+from mypose.engine import build_model_from_config
 from mypose.engine.checkpoint import load_checkpoint, save_checkpoint
 from mypose.engine.evaluate import evaluate
-from mypose.models.hrgcn_lifter import HRGCNLifter
 from mypose.models.losses import WholeBodyLoss
 
 
@@ -19,16 +19,6 @@ def _device_from_config(cfg: dict) -> torch.device:
     requested_device = cfg["train"]["device"]
     selected_device = "cuda" if requested_device == "auto" and torch.cuda.is_available() else "cpu" if requested_device == "auto" else requested_device
     return torch.device(selected_device)
-
-
-def _model_from_config(cfg: dict) -> HRGCNLifter:
-    model_cfg = cfg["model"]
-    return HRGCNLifter(
-        hidden_channels=int(model_cfg["hidden_channels"]),
-        use_temporal=bool(model_cfg["use_temporal"]),
-        temporal_kernel_size=int(model_cfg.get("temporal_kernel_size", 3)),
-        temporal_dilation=int(model_cfg.get("temporal_dilation", 1)),
-    )
 
 
 def train_from_config(cfg: dict, resume: Path | None = None) -> dict[str, float]:
@@ -40,7 +30,7 @@ def train_from_config(cfg: dict, resume: Path | None = None) -> dict[str, float]
     val_set = H3WBDataset(Path(cfg["data"]["val_cache"]), window=int(cfg["data"]["window"]))
     train_loader = DataLoader(train_set, batch_size=int(cfg["train"]["batch_size"]), shuffle=True, num_workers=int(cfg["train"]["num_workers"]))
     val_loader = DataLoader(val_set, batch_size=int(cfg["train"]["batch_size"]), shuffle=False, num_workers=int(cfg["train"]["num_workers"]))
-    model = _model_from_config(cfg).to(device)
+    model = build_model_from_config(cfg).to(device)
     criterion = WholeBodyLoss(
         part_weights=cfg["loss"]["part_weights"],
         local_weights=cfg["loss"]["local_weights"],

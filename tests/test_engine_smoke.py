@@ -11,7 +11,8 @@ from torch.utils.data import DataLoader, TensorDataset
 from mypose.data.h3wb import H3WBDataset
 from mypose.engine.checkpoint import load_checkpoint, save_checkpoint
 from mypose.engine.evaluate import evaluate, main as evaluate_main
-from mypose.engine.train import train_from_config
+from mypose.engine.train import build_model_from_config, train_from_config
+from mypose.models.causal_tcn_lifter import CausalTCNLifter
 from mypose.models.hrgcn_lifter import HRGCNLifter
 
 
@@ -121,6 +122,7 @@ def _training_config(tmp_path: Path) -> dict:
             "window": 1,
         },
         "model": {
+            "type": "hrgcn",
             "hidden_channels": 4,
             "use_temporal": False,
             "temporal_kernel_size": 1,
@@ -154,7 +156,7 @@ class TinyTrainablePoseModel(torch.nn.Module):
 
 def _use_tiny_training_model(monkeypatch) -> None:
     monkeypatch.setattr(
-        "mypose.engine.train._model_from_config",
+        "mypose.engine.train.build_model_from_config",
         lambda cfg: TinyTrainablePoseModel(),
     )
 
@@ -209,6 +211,8 @@ def test_training_resume_continues_after_checkpoint_epoch(tmp_path, monkeypatch)
     [
         Path("configs/h3wb_hrgcn_t1.yaml"),
         Path("configs/h3wb_hrgcn_causal_t27.yaml"),
+        Path("configs/h3wb_tcn_t81.yaml"),
+        Path("configs/h3wb_tcn_t27.yaml"),
     ],
 )
 def test_configs_use_separate_train_and_validation_caches(config_path):
@@ -231,6 +235,37 @@ def test_t27_config_builds_27_frame_temporal_adapter():
     assert model.temporal.receptive_field == cfg["data"]["window"] == 27
 
 
+@pytest.mark.parametrize(
+    ("config_path", "window", "out_dir"),
+    [
+        (
+            Path("configs/h3wb_tcn_t81.yaml"),
+            81,
+            "checkpoints/h3wb_tcn_t81",
+        ),
+        (
+            Path("configs/h3wb_tcn_t27.yaml"),
+            27,
+            "checkpoints/h3wb_tcn_t27",
+        ),
+    ],
+)
+def test_tcn_configs_build_causal_model(config_path, window, out_dir):
+    cfg = yaml.safe_load(config_path.read_text(encoding="utf-8"))
+
+    model = build_model_from_config(cfg)
+
+    assert isinstance(model, CausalTCNLifter)
+    assert cfg["model"]["type"] == "causal_tcn"
+    assert cfg["data"]["window"] == window
+    assert cfg["train"]["out_dir"] == out_dir
+
+
+def test_model_factory_rejects_unknown_model_type():
+    with pytest.raises(ValueError, match="unknown model type"):
+        build_model_from_config({"model": {"type": "transformer"}})
+
+
 def test_evaluate_cli_defaults_to_validation_cache(tmp_path, monkeypatch, capsys):
     cfg = _training_config(tmp_path)
     config_path = tmp_path / "config.yaml"
@@ -245,8 +280,8 @@ def test_evaluate_cli_defaults_to_validation_cache(tmp_path, monkeypatch, capsys
         torch.device("cpu"),
     )
     monkeypatch.setattr(
-        "mypose.engine.evaluate.HRGCNLifter",
-        lambda **kwargs: TinyTrainablePoseModel(),
+        "mypose.engine.evaluate.build_model_from_config",
+        lambda cfg: TinyTrainablePoseModel(),
     )
     monkeypatch.setattr(
         sys,

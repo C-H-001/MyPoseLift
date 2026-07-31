@@ -3,6 +3,7 @@ data:
   val_cache: data/processed/h3wb_2dto3d_val_fold0.npz
   window: 1
 model:
+  type: hrgcn
   hidden_channels: 128
   use_temporal: false
   temporal_kernel_size: 1

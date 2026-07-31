@@ -9,8 +9,8 @@ from torch.utils.data import DataLoader
 
 from mypose.data.h3wb import H3WBDataset
 from mypose.data.keypoints65 import NUM_KEYPOINTS, get_part_indices
+from mypose.engine import build_model_from_config
 from mypose.engine.checkpoint import load_checkpoint
-from mypose.models.hrgcn_lifter import HRGCNLifter
 from mypose.utils.metrics import canonicalize_mask
 
 
@@ -128,12 +128,7 @@ def main() -> None:
         shuffle=False,
         num_workers=int(cfg["train"]["num_workers"]),
     )
-    model = HRGCNLifter(
-        hidden_channels=int(cfg["model"]["hidden_channels"]),
-        use_temporal=bool(cfg["model"]["use_temporal"]),
-        temporal_kernel_size=int(cfg["model"].get("temporal_kernel_size", 3)),
-        temporal_dilation=int(cfg["model"].get("temporal_dilation", 1)),
-    ).to(device)
+    model = build_model_from_config(cfg).to(device)
     load_checkpoint(args.checkpoint, model)
     print(evaluate(model, dataloader, device))
 
