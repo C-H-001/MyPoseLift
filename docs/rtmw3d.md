@@ -59,6 +59,30 @@ E:\Anaconda\python.exe -m venv .venv-rtmw3d
 For CUDA, replace the CPU Torch command with the exact command produced by the
 PyTorch selector for the installed NVIDIA driver. Install only one of
 `opencv-python` or `opencv-python-headless`; this demo uses `opencv-python`.
+
+For the Windows RTX 4060 environment used for the current verification, the
+CUDA runtime was installed with:
+
+```powershell
+.\.venv-rtmw3d\Scripts\python.exe -m pip install --upgrade --force-reinstall --index-url https://download.pytorch.org/whl/cu126 torch==2.7.1+cu126 torchvision==0.22.1+cu126
+.\.venv-rtmw3d\Scripts\python.exe -m pip install --force-reinstall --no-deps --extra-index-url https://miropsota.github.io/torch_packages_builder "mmcv==2.2.0+pt2.7.1cu126"
+.\.venv-rtmw3d\Scripts\python.exe -m pip install --force-reinstall --no-deps "mmdet==3.3.0"
+```
+
+The second wheel is a third-party Windows build with the CUDA operators needed
+by RTMDet, including CUDA NMS. With this wheel, the tested MMDetection version
+is `3.3.0`; its local package version guard must allow MMCV 2.2.0. This is an
+environment workaround, not a source change in MyPoseLift. Always verify the
+operator directly before running the detector:
+
+```powershell
+$p = Resolve-Path ".\.venv-rtmw3d\Lib\site-packages\mmdet\__init__.py"
+(Get-Content $p -Raw).Replace("mmcv_maximum_version = '2.2.0'", "mmcv_maximum_version = '2.3.0'") | Set-Content $p -NoNewline
+```
+
+```powershell
+.\.venv-rtmw3d\Scripts\python.exe -c "import torch; from mmcv.ops import nms; b=torch.tensor([[0.,0.,10.,10.]],device='cuda'); s=torch.tensor([.9],device='cuda'); print(nms(b,s,.5)[0].device)"
+```
 The isolated environment was verified with Torch `2.7.1+cpu`, NumPy `2.2.6`,
 OpenCV `4.13.0`, and all 16 repository tests passing.
 
@@ -160,6 +184,23 @@ python tools/rtmw3d_demo.py \
   --pose-checkpoint weights/rtmw3d-l_8xb64_cocktail14-384x288-794dbc78_20240626.pth \
   --benchmark-frames 100
 ```
+
+For a single centered person, skip the RTMDet-m detector during a quick CPU
+check. This removes the detector cost, but the whole frame becomes the person
+box, so it is not a replacement for detector-based multi-person inference:
+
+```bash
+python tools/rtmw3d_demo.py --input webcam --device cpu --full-frame --cpu-threads 4 --pose-config external/mmpose/projects/rtmpose3d/configs/rtmw3d-l_8xb64_cocktail14-384x288.py --pose-checkpoint weights/rtmw3d-l_8xb64_cocktail14-384x288-794dbc78_20240626.pth --benchmark-frames 10
+```
+
+On CPU, `--cpu-threads 4` is a practical laptop starting point; benchmark
+`2`, `4`, and the machine's physical-core count instead of assuming one value
+is universally fastest. RTMW3D-L itself is still a relatively heavy model, so
+this mode does not promise 30 FPS on CPU.
+
+On CUDA, `--amp` enables FP16 autocast for a latency check. Compare it against
+the default FP32 path on the target GPU; rerun the benchmark after changing
+this flag.
 
 For headless runs, use the demo's `--no-show` option and an output directory.
 The demo's visualizer is not included in model-only latency; drawing and video

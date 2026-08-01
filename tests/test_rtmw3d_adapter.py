@@ -33,9 +33,11 @@ def _install_fake_runtime(monkeypatch, *, detector_result, pose_samples):
 
 
 def _sample(keypoints_3d, scores):
+    keypoints_3d = np.asarray(keypoints_3d)
     return SimpleNamespace(
         pred_instances=SimpleNamespace(
-            keypoints_3d=np.asarray(keypoints_3d),
+            keypoints_3d=keypoints_3d,
+            transformed_keypoints=keypoints_3d[..., :2],
             keypoint_scores=np.asarray(scores),
         )
     )
@@ -84,6 +86,7 @@ def test_adapter_initializes_optional_runtimes_lazily_and_predicts_133_points(
     )
     assert calls["pose_init"] == (str(pose_config), str(pose_checkpoint), "cuda:0")
     assert result.keypoints_3d.shape == (2, 133, 3)
+    assert result.keypoints_2d.shape == (2, 133, 2)
     assert result.scores.shape == (2, 133)
     assert result.bboxes.shape == (2, 5)
     np.testing.assert_allclose(result.bboxes[:, 4], [0.9, 0.4])
@@ -118,6 +121,7 @@ def test_adapter_accepts_keypoints_alias_and_returns_empty_result_when_no_person
     empty = adapter.predict(np.zeros((16, 16, 3), dtype=np.uint8))
 
     assert empty.keypoints_3d.shape == (0, 133, 3)
+    assert empty.keypoints_2d.shape == (0, 133, 2)
     assert empty.scores.shape == (0, 133)
     assert empty.bboxes.shape == (0, 5)
     assert calls["pose_init"] is not None

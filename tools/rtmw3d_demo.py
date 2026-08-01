@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+from contextlib import nullcontext
 import sys
 import time
 from pathlib import Path
@@ -79,15 +80,17 @@ def project_3d_points(points: np.ndarray, size: tuple[int, int]) -> np.ndarray:
     if values.shape[0] == 0:
         return np.empty((0, 2), dtype=np.int32)
 
-    # The official visualizer reorders model axes for display. This compact
-    # view keeps the camera-relative x/y/z semantics while avoiding a 3D GUI.
+    # Keep camera Y as the display vertical axis and rotate X/Z for depth.
     centered = values - np.nanmean(values, axis=0, keepdims=True)
-    scale = float(np.nanmax(np.abs(centered)))
+    yaw = np.deg2rad(30.0)
+    screen_x = np.cos(yaw) * centered[:, 0] + np.sin(yaw) * centered[:, 2]
+    screen_y = centered[:, 1]
+    scale = float(np.nanmax(np.abs(np.column_stack((screen_x, screen_y)))))
     if not np.isfinite(scale) or scale < 1e-6:
         scale = 1.0
-    x = centered[:, 0] / scale
-    y = centered[:, 2] / scale
-    return np.column_stack((width * (0.5 + 0.38 * x), height * (0.5 - 0.38 * y))).astype(np.int32)
+    screen_x = screen_x / scale
+    screen_y = screen_y / scale
+    return np.column_stack((width * (0.5 + 0.38 * screen_x), height * (0.5 - 0.38 * screen_y))).astype(np.int32)
 
 
 def _draw_links(canvas: np.ndarray, points: np.ndarray, links: Iterable[tuple[int, int]], color: tuple[int, int, int]) -> None:
@@ -100,7 +103,10 @@ def draw_result(canvas: np.ndarray, result: PoseResult, *, kpt_thr: float = 0.2)
     """Draw 2D keypoints on a BGR canvas; 3D is drawn by draw_3d_panel."""
 
     for person_index, points_3d in enumerate(result.keypoints_3d):
-        points = points_3d[:, :2].astype(np.int32)
+        if result.keypoints_2d is None:
+            points = points_3d[:, :2].astype(np.int32)
+        else:
+            points = result.keypoints_2d[person_index].astype(np.int32)
         scores = None if result.scores is None else result.scores[person_index]
         _draw_links(canvas, points, BODY_LINKS, (50, 220, 50))
         _draw_links(canvas, points, FOOT_LINKS, (50, 220, 220))
@@ -151,16 +157,44 @@ def _sync(device: str) -> None:
         pass
 
 
+def _configure_cpu_threads(device: str, thread_count: int) -> None:
+    if not device.lower().startswith("cpu") or thread_count <= 0:
+        return
+    try:
+        import torch
+
+        torch.set_num_threads(thread_count)
+        torch.set_num_interop_threads(1)
+    except (ImportError, OSError, RuntimeError):
+        pass
+
+
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--input", required=True, help="image/video path or webcam")
     parser.add_argument("--device", default="cpu")
+    parser.add_argument(
+        "--cpu-threads",
+        type=int,
+        default=4,
+        help="PyTorch intra-op CPU threads; 0 keeps the library default",
+    )
+    parser.add_argument(
+        "--amp",
+        action="store_true",
+        help="use CUDA automatic mixed precision for lower latency",
+    )
     parser.add_argument("--det-config", default=DEFAULT_DETECTOR_CONFIG)
     parser.add_argument("--det-checkpoint", default=DEFAULT_DETECTOR_CHECKPOINT_URL)
     parser.add_argument("--pose-config", default=DEFAULT_POSE_CONFIG)
     parser.add_argument("--pose-checkpoint", default=DEFAULT_POSE_CHECKPOINT_URL)
     parser.add_argument("--bbox-thr", type=float, default=0.3)
     parser.add_argument("--max-instances", type=int, default=1)
+    parser.add_argument(
+        "--full-frame",
+        action="store_true",
+        help="skip RTMDet and use the whole frame as one person bbox; for one centered person",
+    )
     parser.add_argument("--benchmark-frames", type=int, default=0, help="0 means all frames")
     parser.add_argument("--output-root", default="", help="directory for rendered image/video")
     parser.add_argument("--no-show", action="store_true")
@@ -183,13 +217,25 @@ def _adapter_from_args(args: argparse.Namespace) -> RTMW3DAdapter:
         device=args.device,
         bbox_thr=args.bbox_thr,
         max_instances=args.max_instances,
+        use_full_frame=args.full_frame,
     ))
 
 
-def _predict(adapter: RTMW3DAdapter, frame: np.ndarray, device: str) -> tuple[PoseResult, float]:
+def _predict(
+    adapter: RTMW3DAdapter,
+    frame: np.ndarray,
+    device: str,
+    amp: bool = False,
+) -> tuple[PoseResult, float]:
     _sync(device)
     started = time.perf_counter()
-    result = adapter.predict(frame)
+    context = nullcontext()
+    if amp and device.lower().startswith("cuda"):
+        import torch
+
+        context = torch.autocast(device_type="cuda", dtype=torch.float16)
+    with context:
+        result = adapter.predict(frame)
     _sync(device)
     return result, (time.perf_counter() - started) * 1000.0
 
@@ -199,7 +245,7 @@ def _run_image(args: argparse.Namespace, adapter: RTMW3DAdapter, latencies: list
     frame = cv.imread(args.input, cv.IMREAD_COLOR)
     if frame is None:
         raise ValueError(f"unable to read image: {args.input}")
-    result, latency = _predict(adapter, frame, args.device)
+    result, latency = _predict(adapter, frame, args.device, args.amp)
     latencies.append(latency)
     rendered = render_frame(frame, result, latency, _aggregate(latencies))
     if args.output_root:
@@ -224,7 +270,7 @@ def _run_stream(args: argparse.Namespace, adapter: RTMW3DAdapter, latencies: lis
             if not ok:
                 break
             frame_index += 1
-            result, latency = _predict(adapter, frame, args.device)
+            result, latency = _predict(adapter, frame, args.device, args.amp)
             if args.benchmark_frames <= 0 or len(latencies) < args.benchmark_frames:
                 latencies.append(latency)
             rendered = render_frame(frame, result, latency, _aggregate(latencies))
@@ -243,16 +289,21 @@ def _run_stream(args: argparse.Namespace, adapter: RTMW3DAdapter, latencies: lis
                 cv.imshow("RTMW3D", rendered)
                 if cv.waitKey(1) & 0xFF == 27:
                     break
+            if args.benchmark_frames > 0 and len(latencies) >= args.benchmark_frames:
+                break
     finally:
         capture.release()
         if writer is not None:
             writer.release()
         cv.destroyAllWindows()
-        print(f"processed {frame_index} frames; {_aggregate(latencies)}")
+        print(f"processed {frame_index} frames; {_aggregate(latencies)}", flush=True)
 
 
 def main(argv: list[str] | None = None) -> int:
     args = _parser().parse_args(argv)
+    if args.cpu_threads < 0:
+        raise ValueError("--cpu-threads must be non-negative")
+    _configure_cpu_threads(args.device, args.cpu_threads)
     kind = input_kind(args.input)
     adapter = _adapter_from_args(args)
     latencies: list[float] = []

@@ -42,6 +42,7 @@ class RuntimeConfig:
     bbox_thr: float = 0.3
     max_instances: int = 1
     input_size: tuple[int, int] = RTMW3D_INPUT_SIZE
+    use_full_frame: bool = False
 
     def __post_init__(self) -> None:
         if not self.device:
@@ -59,6 +60,7 @@ class PoseResult:
     """A stable representation of one frame's 133-point 3D predictions."""
 
     keypoints_3d: np.ndarray
+    keypoints_2d: Optional[np.ndarray] = None
     scores: Optional[np.ndarray] = None
     bboxes: Optional[np.ndarray] = None
 
@@ -70,6 +72,16 @@ class PoseResult:
                 f"got {keypoints.shape}"
             )
         object.__setattr__(self, "keypoints_3d", keypoints)
+
+        if self.keypoints_2d is not None:
+            keypoints_2d = np.asarray(self.keypoints_2d, dtype=np.float32)
+            expected_2d = (keypoints.shape[0], NUM_KEYPOINTS, 2)
+            if keypoints_2d.shape != expected_2d:
+                raise ValueError(
+                    f"keypoints_2d must have shape {expected_2d}; "
+                    f"got {keypoints_2d.shape}"
+                )
+            object.__setattr__(self, "keypoints_2d", keypoints_2d)
 
         if self.scores is not None:
             scores = np.asarray(self.scores, dtype=np.float32)
@@ -97,6 +109,7 @@ class PoseResult:
         cls,
         keypoints_3d: np.ndarray,
         *,
+        keypoints_2d: Optional[np.ndarray] = None,
         scores: Optional[np.ndarray] = None,
         bboxes: Optional[np.ndarray] = None,
     ) -> "PoseResult":
@@ -112,6 +125,13 @@ class PoseResult:
             )
 
         person_count = keypoints.shape[0]
+        normalized_keypoints_2d = None
+        if keypoints_2d is not None:
+            keypoints_2d_array = np.asarray(keypoints_2d, dtype=np.float32)
+            if keypoints_2d_array.ndim == 2 and person_count == 1:
+                keypoints_2d_array = keypoints_2d_array[None, ...]
+            normalized_keypoints_2d = keypoints_2d_array
+
         normalized_scores = None
         if scores is not None:
             score_array = np.asarray(scores, dtype=np.float32)
@@ -128,6 +148,7 @@ class PoseResult:
 
         return cls(
             keypoints_3d=keypoints,
+            keypoints_2d=normalized_keypoints_2d,
             scores=normalized_scores,
             bboxes=normalized_bboxes,
         )

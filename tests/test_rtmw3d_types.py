@@ -13,11 +13,15 @@ def test_pose_result_normalizes_single_pose_and_preserves_optional_fields():
     keypoints = np.zeros((133, 3), dtype=np.float32)
     scores = np.ones(133, dtype=np.float32)
     bbox = np.array([1, 2, 100, 200, 0.9], dtype=np.float32)
+    keypoints_2d = np.zeros((133, 2), dtype=np.float32)
 
-    result = PoseResult.from_arrays(keypoints, scores=scores, bboxes=bbox)
+    result = PoseResult.from_arrays(
+        keypoints, keypoints_2d=keypoints_2d, scores=scores, bboxes=bbox
+    )
 
     assert result.keypoints_3d.shape == (1, 133, 3)
     assert result.keypoints_3d.dtype == np.float32
+    assert result.keypoints_2d.shape == (1, 133, 2)
     assert result.scores.shape == (1, 133)
     assert result.bboxes.shape == (1, 5)
     np.testing.assert_array_equal(result.scores[0], scores)

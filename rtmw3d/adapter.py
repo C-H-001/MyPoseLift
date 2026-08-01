@@ -91,29 +91,30 @@ class RTMW3DAdapter:
             _validate_model_reference(config.pose_checkpoint, "pose checkpoint")
 
         detector_apis = None
-        if detector is None or inference_detector is None:
-            detector_apis = require_runtime_dependency(
-                "mmdet.apis", "MMDetection RTMW3D runtime"
-            )
-        if detector is None:
-            _validate_model_reference(config.detector_config, "detector config")
-            _validate_model_reference(config.detector_checkpoint, "detector checkpoint")
-            init_detector = getattr(detector_apis, "init_detector", None)
-            if init_detector is None:
-                raise RuntimeDependencyError(
-                    "MMDetection runtime does not expose mmdet.apis.init_detector"
+        if not config.use_full_frame:
+            if detector is None or inference_detector is None:
+                detector_apis = require_runtime_dependency(
+                    "mmdet.apis", "MMDetection RTMW3D runtime"
                 )
-            detector = init_detector(
-                config.detector_config,
-                config.detector_checkpoint,
-                device=config.device,
-            )
-        if inference_detector is None:
-            inference_detector = getattr(detector_apis, "inference_detector", None)
+            if detector is None:
+                _validate_model_reference(config.detector_config, "detector config")
+                _validate_model_reference(config.detector_checkpoint, "detector checkpoint")
+                init_detector = getattr(detector_apis, "init_detector", None)
+                if init_detector is None:
+                    raise RuntimeDependencyError(
+                        "MMDetection runtime does not expose mmdet.apis.init_detector"
+                    )
+                detector = init_detector(
+                    config.detector_config,
+                    config.detector_checkpoint,
+                    device=config.device,
+                )
             if inference_detector is None:
-                raise RuntimeDependencyError(
-                    "MMDetection runtime does not expose mmdet.apis.inference_detector"
-                )
+                inference_detector = getattr(detector_apis, "inference_detector", None)
+                if inference_detector is None:
+                    raise RuntimeDependencyError(
+                        "MMDetection runtime does not expose mmdet.apis.inference_detector"
+                    )
 
         pose_apis = None
         if pose_estimator is None or inference_topdown is None:
@@ -140,6 +141,23 @@ class RTMW3DAdapter:
                     "MMPose runtime does not expose mmpose.apis.inference_topdown"
                 )
 
+        # MMPose's official RTMPose3D demo adapts the MMDetection pipeline so
+        # PackDetInputs and related transforms are registered in the MMPose
+        # registry before the first detector inference.
+        if detector is not None:
+            try:
+                mmpose_utils = require_runtime_dependency(
+                    "mmpose.utils", "MMPose RTMW3D runtime"
+                )
+                adapt_pipeline = getattr(mmpose_utils, "adapt_mmdet_pipeline", None)
+                detector_cfg = getattr(detector, "cfg", None)
+                if adapt_pipeline is not None and detector_cfg is not None:
+                    detector.cfg = adapt_pipeline(detector_cfg)
+            except (ImportError, AttributeError):
+                # Unit-test fakes and older MMPose builds may not expose this
+                # helper; the official v1.3.2 runtime does.
+                pass
+
         self.detector = detector
         self.pose_estimator = pose_estimator
         self._inference_detector = inference_detector
@@ -158,8 +176,15 @@ class RTMW3DAdapter:
         ):
             raise ValueError("frame must be a non-empty BGR image ndarray with 3 channels")
 
-        detection = self._inference_detector(self.detector, frame_bgr)
-        person_bboxes = self._select_person_bboxes(detection)
+        if self.config.use_full_frame:
+            height, width = frame_bgr.shape[:2]
+            person_bboxes = np.array(
+                [[0.0, 0.0, float(width - 1), float(height - 1), 1.0]],
+                dtype=np.float32,
+            )
+        else:
+            detection = self._inference_detector(self.detector, frame_bgr)
+            person_bboxes = self._select_person_bboxes(detection)
         if person_bboxes.shape[0] == 0:
             return self._empty_result()
 
@@ -209,6 +234,7 @@ class RTMW3DAdapter:
         self, samples: Iterable[Any], person_bboxes: np.ndarray
     ) -> PoseResult:
         keypoints: list[np.ndarray] = []
+        keypoints_2d: list[np.ndarray] = []
         scores: list[np.ndarray] = []
         bboxes: list[np.ndarray] = []
         for index, sample in enumerate(list(samples)):
@@ -234,6 +260,17 @@ class RTMW3DAdapter:
                     f"got {points.shape}"
                 )
 
+            points_2d = _to_numpy(_get_field(instances, "transformed_keypoints"))
+            if points_2d is None:
+                points_2d = points[..., :2]
+            if points_2d.ndim == 2:
+                points_2d = points_2d[None, ...]
+            if points_2d.shape != (points.shape[0], NUM_KEYPOINTS, 2):
+                raise ValueError(
+                    "pose transformed_keypoints must have shape "
+                    f"{(points.shape[0], NUM_KEYPOINTS, 2)}; got {points_2d.shape}"
+                )
+
             point_scores = _to_numpy(_get_field(instances, "keypoint_scores"))
             if point_scores is None:
                 point_scores = np.ones(points.shape[:2], dtype=np.float32)
@@ -247,6 +284,7 @@ class RTMW3DAdapter:
 
             for person_index in range(points.shape[0]):
                 keypoints.append(points[person_index])
+                keypoints_2d.append(points_2d[person_index])
                 scores.append(point_scores[person_index])
                 bbox_index = min(index, len(person_bboxes) - 1)
                 bboxes.append(person_bboxes[bbox_index])
@@ -254,13 +292,17 @@ class RTMW3DAdapter:
         if not keypoints:
             return self._empty_result()
         return PoseResult.from_arrays(
-            np.stack(keypoints), scores=np.stack(scores), bboxes=np.stack(bboxes)
+            np.stack(keypoints),
+            keypoints_2d=np.stack(keypoints_2d),
+            scores=np.stack(scores),
+            bboxes=np.stack(bboxes),
         )
 
     @staticmethod
     def _empty_result() -> PoseResult:
         return PoseResult.from_arrays(
             np.empty((0, NUM_KEYPOINTS, 3), dtype=np.float32),
+            keypoints_2d=np.empty((0, NUM_KEYPOINTS, 2), dtype=np.float32),
             scores=np.empty((0, NUM_KEYPOINTS), dtype=np.float32),
             bboxes=np.empty((0, 5), dtype=np.float32),
         )
