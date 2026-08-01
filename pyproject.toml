@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "mypose-lift"
+version = "0.1.0"
+description = "Small runtime adapter for RTMW3D whole-body 3D pose inference"
+requires-python = ">=3.10"
+dependencies = ["numpy>=1.24"]
+
+[project.optional-dependencies]
+test = ["pytest>=8"]
+demo = ["opencv-python>=4.8"]
+
+[tool.setuptools.packages.find]
+include = ["rtmw3d*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
