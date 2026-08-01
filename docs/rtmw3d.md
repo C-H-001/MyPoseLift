@@ -44,6 +44,24 @@ python -m pip install "mmpose==1.3.2"
 python -m pip install -e ".[test,demo]"
 ```
 
+On the Windows machine used for this workspace, the existing Anaconda base
+environment had incompatible Torch/OpenMP DLLs and two OpenCV distributions
+claiming the same `cv2` module. The reproducible local fix is an isolated
+environment:
+
+```powershell
+E:\Anaconda\python.exe -m venv .venv-rtmw3d
+.\.venv-rtmw3d\Scripts\python.exe -m pip install -U pip
+.\.venv-rtmw3d\Scripts\python.exe -m pip install --index-url https://download.pytorch.org/whl/cpu torch==2.7.1
+.\.venv-rtmw3d\Scripts\python.exe -m pip install -e ".[test,demo]"
+```
+
+For CUDA, replace the CPU Torch command with the exact command produced by the
+PyTorch selector for the installed NVIDIA driver. Install only one of
+`opencv-python` or `opencv-python-headless`; this demo uses `opencv-python`.
+The isolated environment was verified with Torch `2.7.1+cpu`, NumPy `2.2.6`,
+OpenCV `4.13.0`, and all 16 repository tests passing.
+
 MMCV contains compiled operators and must match the installed PyTorch/CUDA
 combination. If MIM cannot find a compatible wheel, follow the [official MMCV
 installation matrix](https://mmcv.readthedocs.io/en/2.x/get_started/installation.html)

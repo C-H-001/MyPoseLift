@@ -32,6 +32,10 @@ Install MMPose, MMDetection, MMCV, and MMEngine using the pinned procedure in
 the RTMW3D guide. Do not copy MMPose into this repository. The guide uses an
 external `external/mmpose` checkout only for official config files.
 
+Use a clean isolated environment for Windows. The existing Anaconda base
+environment is known to contain conflicting Torch/OpenMP DLLs and duplicate
+OpenCV distributions; the reproducible commands are in the RTMW3D guide.
+
 ## Tests
 
 ```bash
