@@ -417,3 +417,12 @@ without improvement; the hard upper bound is 100 epochs. The best checkpoint
 is saved by MPJPE. H3WB coordinates are converted from millimeters to meters
 inside the official MMPose dataset class, so the early-stopping threshold is
 `0.0005`, not `0.5`.
+
+To wait for a large COCO download and start the mixed run automatically after
+asset validation, use the watcher below. It records progress in
+`work_dirs\coco_mixed_download_watcher.log` and writes training output under
+`work_dirs\rtmw3d-m_68_h3wb-coco-body-256x192_run03_accum4_02`:
+
+```powershell
+pwsh -NoProfile -File tools\run_coco_mixed_after_download.ps1 -BitsJobId cbbf49a5-149b-45fd-a57c-8ea19b95dbd8
+```
