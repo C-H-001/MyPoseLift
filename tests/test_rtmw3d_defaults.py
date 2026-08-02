@@ -11,6 +11,11 @@ from rtmw3d.defaults import (
     SUPPORTED_INPUT_MODES,
     validate_input_mode,
 )
+from rtmw3d.reduced_layout import (
+    REDUCED_KEYPOINT_INDICES,
+    REDUCED_KEYPOINT_NAMES,
+    REDUCED_NUM_KEYPOINTS,
+)
 
 
 def test_official_rtmw3d_defaults_and_133_point_layout():
@@ -39,3 +44,9 @@ def test_input_mode_validation_is_explicit():
 
     with pytest.raises(ValueError, match="Unsupported input mode"):
         validate_input_mode("stream")
+
+
+def test_reduced_layout_keeps_body_feet_and_hands_only():
+    assert REDUCED_NUM_KEYPOINTS == 65
+    assert REDUCED_KEYPOINT_INDICES == tuple(range(23)) + tuple(range(91, 133))
+    assert REDUCED_KEYPOINT_NAMES[:3] == ("nose", "left_eye", "right_eye")

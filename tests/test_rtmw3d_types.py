@@ -47,6 +47,18 @@ def test_runtime_config_uses_cpu_safe_defaults():
     assert config.input_size == (288, 384)
 
 
+def test_pose_result_supports_reduced_65_point_layout():
+    result = PoseResult.from_arrays(
+        np.zeros((65, 3), dtype=np.float32),
+        keypoints_2d=np.zeros((65, 2), dtype=np.float32),
+        scores=np.ones(65, dtype=np.float32),
+        keypoint_count=65,
+    )
+
+    assert result.keypoint_count == 65
+    assert result.keypoints_3d.shape == (1, 65, 3)
+
+
 def test_missing_optional_dependency_has_actionable_error():
     with pytest.raises(RuntimeDependencyError, match="MMPose runtime"):
         require_runtime_dependency("module_that_does_not_exist_for_rtmw3d", "MMPose runtime")

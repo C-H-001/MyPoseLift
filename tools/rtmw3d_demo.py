@@ -190,6 +190,7 @@ def _parser() -> argparse.ArgumentParser:
     parser.add_argument("--pose-checkpoint", default=DEFAULT_POSE_CHECKPOINT_URL)
     parser.add_argument("--bbox-thr", type=float, default=0.3)
     parser.add_argument("--max-instances", type=int, default=1)
+    parser.add_argument("--num-keypoints", type=int, default=133)
     parser.add_argument(
         "--full-frame",
         action="store_true",
@@ -218,6 +219,7 @@ def _adapter_from_args(args: argparse.Namespace) -> RTMW3DAdapter:
         bbox_thr=args.bbox_thr,
         max_instances=args.max_instances,
         use_full_frame=args.full_frame,
+        num_keypoints=args.num_keypoints,
     ))
 
 

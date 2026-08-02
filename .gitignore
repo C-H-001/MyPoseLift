@@ -9,5 +9,7 @@ venv/
 external/
 weights/
 outputs/
+work_dirs/
+data/
 *.pth
 *.onnx

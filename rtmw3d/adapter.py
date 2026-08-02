@@ -8,7 +8,6 @@ from urllib.parse import urlparse
 
 import numpy as np
 
-from .defaults import NUM_KEYPOINTS
 from .types import PoseResult, RuntimeConfig, RuntimeDependencyError
 from .types import require_runtime_dependency
 
@@ -249,14 +248,14 @@ class RTMW3DAdapter:
                 raise ValueError("pose output is missing keypoints_3d/keypoints")
             if points.ndim == 2:
                 points = points[None, ...]
-            if points.ndim != 3 or points.shape[1] != NUM_KEYPOINTS:
+            if points.ndim != 3 or points.shape[1] != self.config.num_keypoints:
                 raise ValueError(
-                    "pose keypoints must have shape (N, 133, 3); "
+                    f"pose keypoints must have shape (N, {self.config.num_keypoints}, 3); "
                     f"got {points.shape}"
                 )
-            if points.shape[2] != 3:
+            if points.shape[1] != self.config.num_keypoints or points.shape[2] != 3:
                 raise ValueError(
-                    "pose keypoints must have shape (N, 133, 3); "
+                    f"pose keypoints must have shape (N, {self.config.num_keypoints}, 3); "
                     f"got {points.shape}"
                 )
 
@@ -265,10 +264,10 @@ class RTMW3DAdapter:
                 points_2d = points[..., :2]
             if points_2d.ndim == 2:
                 points_2d = points_2d[None, ...]
-            if points_2d.shape != (points.shape[0], NUM_KEYPOINTS, 2):
+            if points_2d.shape != (points.shape[0], self.config.num_keypoints, 2):
                 raise ValueError(
                     "pose transformed_keypoints must have shape "
-                    f"{(points.shape[0], NUM_KEYPOINTS, 2)}; got {points_2d.shape}"
+                    f"{(points.shape[0], self.config.num_keypoints, 2)}; got {points_2d.shape}"
                 )
 
             point_scores = _to_numpy(_get_field(instances, "keypoint_scores"))
@@ -296,15 +295,18 @@ class RTMW3DAdapter:
             keypoints_2d=np.stack(keypoints_2d),
             scores=np.stack(scores),
             bboxes=np.stack(bboxes),
+            keypoint_count=self.config.num_keypoints,
         )
 
-    @staticmethod
-    def _empty_result() -> PoseResult:
+    def _empty_result(self) -> PoseResult:
         return PoseResult.from_arrays(
-            np.empty((0, NUM_KEYPOINTS, 3), dtype=np.float32),
-            keypoints_2d=np.empty((0, NUM_KEYPOINTS, 2), dtype=np.float32),
-            scores=np.empty((0, NUM_KEYPOINTS), dtype=np.float32),
+            np.empty((0, self.config.num_keypoints, 3), dtype=np.float32),
+            keypoints_2d=np.empty(
+                (0, self.config.num_keypoints, 2), dtype=np.float32
+            ),
+            scores=np.empty((0, self.config.num_keypoints), dtype=np.float32),
             bboxes=np.empty((0, 5), dtype=np.float32),
+            keypoint_count=self.config.num_keypoints,
         )
 
 

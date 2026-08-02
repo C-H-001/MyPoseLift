@@ -43,6 +43,7 @@ class RuntimeConfig:
     max_instances: int = 1
     input_size: tuple[int, int] = RTMW3D_INPUT_SIZE
     use_full_frame: bool = False
+    num_keypoints: int = NUM_KEYPOINTS
 
     def __post_init__(self) -> None:
         if not self.device:
@@ -53,6 +54,8 @@ class RuntimeConfig:
             raise ValueError("max_instances must be at least 1")
         if len(self.input_size) != 2 or any(size <= 0 for size in self.input_size):
             raise ValueError("input_size must contain two positive dimensions")
+        if self.num_keypoints < 1:
+            raise ValueError("num_keypoints must be positive")
 
 
 @dataclass(frozen=True)
@@ -63,19 +66,21 @@ class PoseResult:
     keypoints_2d: Optional[np.ndarray] = None
     scores: Optional[np.ndarray] = None
     bboxes: Optional[np.ndarray] = None
+    keypoint_count: int = NUM_KEYPOINTS
 
     def __post_init__(self) -> None:
         keypoints = np.asarray(self.keypoints_3d, dtype=np.float32)
-        if keypoints.ndim != 3 or keypoints.shape[1:] != (NUM_KEYPOINTS, 3):
+        expected_3d = (self.keypoint_count, 3)
+        if keypoints.ndim != 3 or keypoints.shape[1:] != expected_3d:
             raise ValueError(
-                "keypoints_3d must have shape (N, 133, 3); "
+                f"keypoints_3d must have shape (N, {self.keypoint_count}, 3); "
                 f"got {keypoints.shape}"
             )
         object.__setattr__(self, "keypoints_3d", keypoints)
 
         if self.keypoints_2d is not None:
             keypoints_2d = np.asarray(self.keypoints_2d, dtype=np.float32)
-            expected_2d = (keypoints.shape[0], NUM_KEYPOINTS, 2)
+            expected_2d = (keypoints.shape[0], self.keypoint_count, 2)
             if keypoints_2d.shape != expected_2d:
                 raise ValueError(
                     f"keypoints_2d must have shape {expected_2d}; "
@@ -85,7 +90,7 @@ class PoseResult:
 
         if self.scores is not None:
             scores = np.asarray(self.scores, dtype=np.float32)
-            expected = (keypoints.shape[0], NUM_KEYPOINTS)
+            expected = (keypoints.shape[0], self.keypoint_count)
             if scores.shape != expected:
                 raise ValueError(f"scores must have shape {expected}; got {scores.shape}")
             object.__setattr__(self, "scores", scores)
@@ -112,15 +117,17 @@ class PoseResult:
         keypoints_2d: Optional[np.ndarray] = None,
         scores: Optional[np.ndarray] = None,
         bboxes: Optional[np.ndarray] = None,
+        keypoint_count: Optional[int] = None,
     ) -> "PoseResult":
         """Normalize one-person arrays and validate the multi-person contract."""
 
         keypoints = np.asarray(keypoints_3d, dtype=np.float32)
         if keypoints.ndim == 2:
             keypoints = keypoints[None, ...]
-        if keypoints.ndim != 3 or keypoints.shape[1:] != (NUM_KEYPOINTS, 3):
+        expected_count = NUM_KEYPOINTS if keypoint_count is None else keypoint_count
+        if keypoints.ndim != 3 or keypoints.shape[1:] != (expected_count, 3):
             raise ValueError(
-                "keypoints_3d must have shape (N, 133, 3); "
+                f"keypoints_3d must have shape (N, {expected_count}, 3); "
                 f"got {keypoints.shape}"
             )
 
@@ -151,4 +158,5 @@ class PoseResult:
             keypoints_2d=normalized_keypoints_2d,
             scores=normalized_scores,
             bboxes=normalized_bboxes,
+            keypoint_count=expected_count,
         )

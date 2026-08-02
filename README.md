@@ -14,10 +14,11 @@ lifting model in this phase.
   installed correctly.
 - Current-frame-only processing. No future frames, temporal buffer, or
   look-ahead is used.
-- H3WB, COCO3D, and old training/data-processing code are not part of this
-  quick verification.
+- A reduced 68-point RTMW3D-M-sized H3WB fine-tuning path is included for
+  experiments; it is separate from the 133-point inference quick path.
 
 The complete setup and command reference is in [docs/rtmw3d.md](docs/rtmw3d.md).
+For the video-file workflow specifically, see the [video inference guide](docs/rtmw3d.md#video-file-to-annotated-video).
 
 ## Quick Install
 
@@ -29,8 +30,14 @@ python -m pip install -e ".[test,demo]"
 ```
 
 Install MMPose, MMDetection, MMCV, and MMEngine using the pinned procedure in
-the RTMW3D guide. Do not copy MMPose into this repository. The guide uses an
-external `external/mmpose` checkout only for official config files.
+the RTMW3D guide. For H3WB training, also install the local training extra:
+
+```bash
+python -m pip install -e ".[test,demo,train]"
+```
+
+Do not copy MMPose into this repository. The guide uses an external
+`external/mmpose` checkout only for official config files.
 
 Use a clean isolated environment for Windows. The existing Anaconda base
 environment is known to contain conflicting Torch/OpenMP DLLs and duplicate

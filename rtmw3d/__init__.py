@@ -19,6 +19,13 @@ from .types import (
     RuntimeDependencyError,
     require_runtime_dependency,
 )
+from .reduced_layout import (
+    REDUCED_KEYPOINT_INDICES,
+    REDUCED_KEYPOINT_NAMES,
+    REDUCED_NUM_KEYPOINTS,
+    reduce_joint_parents,
+    reduced_mapping,
+)
 
 __all__ = [
     "COCO_WHOLEBODY_GROUPS",
@@ -33,8 +40,13 @@ __all__ = [
     "RTMW3DAdapter",
     "RuntimeConfig",
     "RuntimeDependencyError",
+    "REDUCED_KEYPOINT_INDICES",
+    "REDUCED_KEYPOINT_NAMES",
+    "REDUCED_NUM_KEYPOINTS",
     "SUPPORTED_INPUT_MODES",
     "require_runtime_dependency",
+    "reduce_joint_parents",
+    "reduced_mapping",
     "summarize_latencies",
     "validate_input_mode",
 ]
