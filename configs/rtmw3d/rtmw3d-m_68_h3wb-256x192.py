@@ -9,7 +9,12 @@ _base_ = [
 ]
 
 custom_imports = dict(
-    imports=['rtmpose3d', 'rtmw3d.h3wb_transforms', 'rtmw3d.h36w_dataset'],
+    imports=[
+        'rtmpose3d',
+        'rtmw3d.h3wb_transforms',
+        'rtmw3d.h36w_dataset',
+        'rtmw3d.validation_visualization',
+    ],
     allow_failed_imports=False,
 )
 
@@ -337,6 +342,12 @@ default_hooks = dict(
     logger=dict(interval=50),
 )
 custom_hooks = [
+    dict(
+        type='ValidationSampleVisualizationHook',
+        joint_parents=joint_parents,
+        num_samples=3,
+        out_dir='val_visualizations',
+    ),
     dict(
         type='EarlyStoppingHook',
         monitor='MPJPE',
