@@ -113,3 +113,36 @@ Input: (B, 34, 81) -> 1D Conv Block (dil=1, 34->1024)
 6. 训练脚本 + 每轮验证可视化
 7. RTMPose 推理管线
 8. 完整评测 (H36M Protocol #1, 3DPW test)
+
+---
+
+## 11. 补充：T3WB 标注（H36M 3D 来源）
+
+**位置**: /mnt/disk2/ch/T3WB/
+**文件**: h3wb_train.npz (训练), task1_test_3d.npz / task2_test_3d.npz (测试), T3WB_v1.json (2D 全身), json.zip
+
+### 11.1 数据结构
+- metadata: {subject: {camera_id: {K,R,T,Distortion}}}, subjects = S1,S5,S6,S7,S8
+- train_data: {subject: {action: {global_3d(N,133,3), frame_id(N,), camera_3d(N,133,3), pose_2d(N,133,2), sample_id(N,)}}}
+- 133 点 = 17 body + 68 face + 42 hands + 6 feet
+- metadata 含 h3wb_vs_h36m 映射表 (T3WB body -> H36M, 13对) 和 body/face/hand/foot 索引定义
+- K 为归一化相机内参 (fx=1.145, cx=0.515), 需与像素坐标换算
+
+### 11.2 已验证事实
+- frame_id (str, 如 0075) 与 h36m.zip 图像帧名 frame_XXXX.jpg 直接对应
+- S5/Directions 1: h36m.zip 2248 帧 (0075-4925, 步长5=10fps), T3WB 562 帧 (75-4925, 稀疏采样)
+- T3WB 时序为 10fps 基础 + 稀疏采样, 帧间隔 5-50 不等
+- 相机坐标: T3WB 已提供 camera_3d (相机系), global_3d (世界系, mm)
+
+### 11.3 错位风险与校验（实现时必须执行）
+1. frame_id 与图像文件对齐断言（对每个 subject/action 全量校验）
+2. h3wb_vs_h36m 只含 13 对, T3WB body[1,2,3,4] 语义需确认（推测为 pelvis/spine/thorax/head）
+3. 关节映射后必须做 3D 骨架可视化抽查（左右对称、拓扑合理）
+4. 相机投影一致性检查: camera_3d -> K -> pose_2d 与存储的 pose_2d 对比
+5. subject 划分: T3WB 训练 S1,S5,S6,S7 (S6 无图像但有完整标注), 测试 S8
+6. H36M 标准协议 S9/S11 评测需要官方 3D 标注（T3WB 不含, 需另寻）
+
+### 11.4 对训练的影响
+- lifting 网络训练只需 2D/3D 坐标序列, 不需要图像 -> S6 也可用
+- h36m.zip 图像主要用途: 可视化、2D 检测器验证、推理演示
+- 时序窗口构建需处理 T3WB 稀疏采样（帧间隔不均）
