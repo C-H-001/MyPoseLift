@@ -49,4 +49,5 @@ SEED = 0
 NUM_WORKERS = 8
 
 # ---------- T3WB ----------
-T3WB_IMG_W, T3WB_IMG_H = 1000, 1000   # H36M 图像分辨率
+T3WB_IMG_W, T3WB_IMG_H = 1000, 1000   # T3WB 标注尺度 (投影验证 0.01px)
+# 实际图像 1000x1002, 推理时 RTMPose 坐标需按 1000/1002 缩放 y
