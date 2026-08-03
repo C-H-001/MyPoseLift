@@ -35,8 +35,7 @@ def eval_npz(model, npz_path, device, joint_mask, batch=512, verbose=False):
             d = torch.norm(pred - y, dim=-1)  # (B,17)
             errs.append(d.cpu().numpy())
     errs = np.concatenate(errs, 0)
-    mask = joint_mask.numpy().astype(bool)
-    sup = errs[:, mask]
+    mask = joint_mask.cpu().numpy().astype(bool)
     if verbose:
         names = ["nose","l_eye","r_eye","l_ear","r_ear","l_shoulder","r_shoulder",
                  "l_elbow","r_elbow","l_wrist","r_wrist","l_hip","r_hip",
@@ -44,7 +43,7 @@ def eval_npz(model, npz_path, device, joint_mask, batch=512, verbose=False):
         for j in range(17):
             if mask[j]:
                 print(f"  {names[j]:12s}: {errs[:, j].mean():.4f} (norm)")
-    return float(errs[:, sup].mean()), float(np.median(errs[:, sup]))
+    return float(errs[:, mask].mean()), float(np.median(errs[:, mask]))
 
 
 def main():

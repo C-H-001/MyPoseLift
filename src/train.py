@@ -86,6 +86,8 @@ def main():
     parser.add_argument("--batch", type=int, default=BATCH_SIZE)
     parser.add_argument("--workers", type=int, default=NUM_WORKERS)
     parser.add_argument("--lr", type=float, default=LR)
+    parser.add_argument("--datasets", type=str, default="t3wb",
+                        help="逗号分隔: t3wb,pw3d")
     args = parser.parse_args()
 
     torch.manual_seed(SEED)
@@ -93,11 +95,21 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"设备: {device}")
 
-    # 数据
-    train_ds = TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
-                                   subjects=TRAIN_SUBJECTS, rf=RECEPTIVE_FIELD)
-    val_ds = TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
-                                 subjects=VAL_SUBJECTS, rf=RECEPTIVE_FIELD, stride=5)
+    # 数据 (支持多数据集混合)
+    from torch.utils.data import ConcatDataset
+    datasets = args.datasets.split(",")
+    train_dss, val_dss = [], []
+    for ds_name in datasets:
+        if ds_name == "t3wb":
+            train_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
+                                                 subjects=TRAIN_SUBJECTS, rf=RECEPTIVE_FIELD))
+            val_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
+                                               subjects=VAL_SUBJECTS, rf=RECEPTIVE_FIELD, stride=5))
+        elif ds_name == "pw3d":
+            train_dss.append(TemporalPoseDataset(CACHE_DIR / "pw3d_train.npz",
+                                                 rf=RECEPTIVE_FIELD))
+    train_ds = ConcatDataset(train_dss)
+    val_ds = ConcatDataset(val_dss) if len(val_dss) > 1 else val_dss[0]
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
                               num_workers=args.workers, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch, shuffle=False,

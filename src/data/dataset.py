@@ -19,9 +19,15 @@ from src.data.normalize import center_at_root, normalize_scale
 MIN_SCALE_PX = 10.0  # torso 像素长度下限
 
 
-def build_window_indices(T, rf):
-    """T 帧序列 -> 因果窗口列表。每个窗口 [i-rf+1, ..., i], 以 i 结尾。"""
-    return [list(range(i - rf + 1, i + 1)) for i in range(rf - 1, T)]
+def build_window_indices(T, rf, stride_in=1):
+    """T 帧序列 -> 因果窗口列表。每个窗口以 i 结尾, 窗口内帧间隔 = stride_in。
+    stride_in=1: [i-rf+1, ..., i] (连续); stride_in=2: [i-2(rf-1), i-2(rf-2), ..., i]
+    """
+    out = []
+    for i in range((rf - 1) * stride_in, T, 1):
+        w = list(range(i - (rf - 1) * stride_in, i + 1, stride_in))
+        out.append(w)
+    return out
 
 
 def _fill_missing_with_root(pts):
@@ -47,10 +53,14 @@ def _fill_missing_with_root(pts):
 
 
 class TemporalPoseDataset(Dataset):
-    def __init__(self, npz_path, subjects=None, rf=81, stride=1):
+    def __init__(self, npz_path, subjects=None, rf=81, stride=1,
+                 stride_aug=(1, 2, 3)):
+        """stride_aug: 窗口内步长增强 (时间尺度鲁棒)。None 则禁用。
+        stride: 窗口间步长 (控制样本量)。
+        """
         data = np.load(npz_path, allow_pickle=True)["data"].item()
         self.rf = rf
-        self.samples = []      # (subject, action, camera, center_idx, window)
+        self.samples = []      # (subject, action, camera, center_idx, window, stride_in)
         self.cache = {}        # (subject, action, camera) -> item
         for subj, actions in data.items():
             if subjects is not None and subj not in subjects:
@@ -58,16 +68,18 @@ class TemporalPoseDataset(Dataset):
             for act, cams in actions.items():
                 for ck, item in cams.items():
                     N = len(item["frame_id"])
-                    windows = build_window_indices(N, rf)[::stride]
-                    for w in windows:
-                        self.samples.append((subj, act, ck, w[-1], w))
+                    # 每个 stride_in 构建一批窗口
+                    for sin in stride_aug:
+                        windows = build_window_indices(N, rf, sin)[::stride]
+                        for w in windows:
+                            self.samples.append((subj, act, ck, w[-1], w, sin))
                     self.cache[(subj, act, ck)] = item
 
     def __len__(self):
         return len(self.samples)
 
     def __getitem__(self, idx):
-        subj, act, ck, center, w = self.samples[idx]
+        subj, act, ck, center, w, _ = self.samples[idx]
         item = self.cache[(subj, act, ck)]
         pose2d = item["pose2d_coco17"][w]     # (rf,17,2) 像素
         cam3d = item["cam3d_coco17"][center]  # (17,3) 相机系 mm

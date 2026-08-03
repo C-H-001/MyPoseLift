@@ -105,12 +105,15 @@ def build_cache():
                 print(f"  跳过 {seq_name}: {e}")
                 continue
             p2d, c3d, fids, valid = seq_to_coco(data)
+            # 结构对齐 T3WB: {subject: {action: {camera: item}}}
             out[seq_name] = {
-                "cam0": {
-                    "pose2d_coco17": p2d,
-                    "cam3d_coco17": c3d,
-                    "world3d_coco17": c3d,  # 3DPW 无独立世界系缓存, 占位
-                    "frame_id": fids,
+                seq_name: {
+                    "cam0": {
+                        "pose2d_coco17": p2d,
+                        "cam3d_coco17": c3d,
+                        "world3d_coco17": c3d,  # 3DPW 无独立世界系缓存, 占位
+                        "frame_id": fids,
+                    }
                 }
             }
             n_valid = int(valid.sum())
