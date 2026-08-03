@@ -4,3 +4,4 @@ outputs/
 data/cache/
 .worktrees/
 *.log
+weights/
