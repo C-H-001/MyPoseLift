@@ -65,10 +65,17 @@ def list_train_actions(subject=None):
 
 
 def get_camera_params(subject, camera_id):
-    """返回 (K_norm, R, T, Distortion) 均 float32"""
+    """返回 (K_norm, R, T_mm, Distortion) 均 float32。
+
+    注意: T3WB 的 T 平移向量单位为【米】(如 [0,0,4.45]), 而 3D 坐标为 mm。
+    已统一转换为 mm (x1000), 与 world_to_camera 配合使用:
+        Xc = R @ Xw + T_mm
+    已通过 S5/Directions 1 全量数据验证 (误差 0.0mm)。
+    """
     meta = load_t3wb_meta()
     cam = meta[subject][camera_id]
+    T_mm = np.asarray(cam["T"], dtype=np.float32) * 1000.0
     return (np.asarray(cam["K"], dtype=np.float32),
             np.asarray(cam["R"], dtype=np.float32),
-            np.asarray(cam["T"], dtype=np.float32),
+            T_mm,
             np.asarray(cam["Distortion"], dtype=np.float32))

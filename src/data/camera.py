@@ -16,6 +16,8 @@ def normalize_K(K_norm, img_w, img_h):
     若 fx 已是像素单位 (>10), 直接返回。
     """
     K = np.asarray(K_norm, dtype=np.float64)
+    if K.ndim == 3:
+        K = K[0]
     fx, fy = K[0, 0], K[1, 1]
     if fx > 10:
         return K
@@ -27,21 +29,28 @@ def normalize_K(K_norm, img_w, img_h):
 
 def world_to_camera(Xw, R, T):
     """世界坐标 (N,3) -> 相机坐标 (N,3)。Xc = R @ Xw + T
-    R:(3,3), T:(3,) 或 (1,3) 或 (1,1,3)
+    R:(3,3), T:(3,) 或 (1,3) 或 (1,1,3)。T 与 Xw 单位一致 (mm)。
+    (T3WB 的原始 T 为米, 已在 t3wb.get_camera_params 中转换)
     """
-    Xw = np.asarray(Xw, dtype=np.float64).reshape(-1, 3)
+    Xw = np.asarray(Xw, dtype=np.float64)
+    orig_shape = Xw.shape[:-1]
+    flat = Xw.reshape(-1, 3)
     R = np.asarray(R, dtype=np.float64).reshape(3, 3)
     T = np.asarray(T, dtype=np.float64).reshape(3)
-    return (Xw @ R.T + T).astype(np.float32)
+    out = flat @ R.T + T
+    return out.reshape(*orig_shape, 3).astype(np.float32)
 
 
 def camera_to_world(Xc, R, T):
     """相机坐标 (N,3) -> 世界坐标 (N,3)。Xw = R.T @ (Xc - T)
     """
-    Xc = np.asarray(Xc, dtype=np.float64).reshape(-1, 3)
+    Xc = np.asarray(Xc, dtype=np.float64)
+    orig_shape = Xc.shape[:-1]
+    flat = Xc.reshape(-1, 3)
     R = np.asarray(R, dtype=np.float64).reshape(3, 3)
     T = np.asarray(T, dtype=np.float64).reshape(3)
-    return ((Xc - T) @ R).astype(np.float32)
+    out = (flat - T) @ R
+    return out.reshape(*orig_shape, 3).astype(np.float32)
 
 
 def project_to_pixel(Xc, K_norm, img_w, img_h):
@@ -49,10 +58,13 @@ def project_to_pixel(Xc, K_norm, img_w, img_h):
     假设无畸变 (T3WB 提供 Distortion, 但投影一致性检查用无畸变模型验证,
     若误差大需引入畸变校正, 见 check_data.py 阶段)。
     """
-    Xc = np.asarray(Xc, dtype=np.float64).reshape(-1, 3)
-    z = Xc[:, 2:3]
+    Xc = np.asarray(Xc, dtype=np.float64)
+    orig_shape = Xc.shape[:-1]
+    flat = Xc.reshape(-1, 3)
+    z = flat[:, 2:3]
     z = np.where(np.abs(z) < 1e-6, 1e-6, z)
     K = normalize_K(K_norm, img_w, img_h)
-    x = K[0, 0] * Xc[:, 0:1] / z + K[0, 2]
-    y = K[1, 1] * Xc[:, 1:2] / z + K[1, 2]
-    return np.concatenate([x, y], axis=1).astype(np.float32)
+    x = K[0, 0] * flat[:, 0:1] / z + K[0, 2]
+    y = K[1, 1] * flat[:, 1:2] / z + K[1, 2]
+    out = np.concatenate([x, y], axis=1)
+    return out.reshape(*orig_shape, 2).astype(np.float32)
