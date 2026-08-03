@@ -1,0 +1,9 @@
+torch==2.4.1
+numpy
+scipy
+opencv-python
+matplotlib
+tqdm
+tensorboard
+pandas
+scikit-learn
