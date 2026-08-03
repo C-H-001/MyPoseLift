@@ -220,7 +220,9 @@ try:
                 return
             output_dir = Path(runner.work_dir) / runner.timestamp / self.out_dir
             output_dir.mkdir(parents=True, exist_ok=True)
-            epoch = int(runner.epoch) + 1
+            # MMEngine exposes the current 1-based epoch in after_val_epoch.
+            # Keep filenames aligned with the validation log and checkpoint.
+            epoch = int(runner.epoch)
             serializable = []
             for sample in self.samples:
                 image_name = f"epoch_{epoch:03d}_sample_{sample['index']:02d}.png"
