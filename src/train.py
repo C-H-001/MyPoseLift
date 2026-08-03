@@ -1,0 +1,157 @@
+"""训练入口: python src/train.py [--epochs 50] [--resume ckpt.pt] [--batch 1024]
+
+每轮: 训练 -> val 加权 MPJPE -> 5 样本可视化 (GT vs Pred) -> checkpoint
+数据: T3WB 缓存 (S1,S5,S6,S7 训练; S5 部分做开发验证; S8 由评测脚本评估)
+"""
+import argparse
+import time
+import sys
+from pathlib import Path
+import numpy as np
+import torch
+from torch.utils.data import DataLoader
+from torch.utils.tensorboard import SummaryWriter
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from configs.config import (EPOCHS, BATCH_SIZE, LR, RECEPTIVE_FIELD, SEED,
+                            CKPT_DIR, VAL_DIR, LOG_DIR, CACHE_DIR, NUM_WORKERS)
+from src.data.dataset import TemporalPoseDataset
+from src.data.joint_mapping import build_coco17_supervision_mask
+from src.model.tcn import TemporalConvNet
+from src.losses import weighted_mpjpe_loss
+from src.visualize import plot_skeleton_3d
+
+TRAIN_SUBJECTS = ["S1", "S5", "S6", "S7"]
+VAL_SUBJECTS = ["S5"]  # 开发验证 (正式评测用 S8 test npz)
+
+
+def build_model():
+    return TemporalConvNet(num_input_channels=34, num_joints=17,
+                           receptive_field=RECEPTIVE_FIELD, causal=True,
+                           num_layers=5, channels=1024)
+
+
+def evaluate(model, loader, device, joint_mask):
+    model.eval()
+    losses = []
+    with torch.no_grad():
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            losses.append(weighted_mpjpe_loss(pred, y, joint_mask).item())
+    return float(np.mean(losses)) if losses else float("inf")
+
+
+def save_val_samples(model, loader, device, epoch, max_save=5):
+    """保存 N 个样本: 3D GT vs Pred 对比图 (归一化空间, torso=1)"""
+    model.eval()
+    saved = 0
+    with torch.no_grad():
+        for x, y in loader:
+            x, y = x.to(device), y.to(device)
+            pred = model(x)
+            for i in range(min(max_save - saved, x.size(0))):
+                p = pred[i].cpu().numpy()   # (17,3) 归一化
+                g = y[i].cpu().numpy()
+                out = VAL_DIR / f"epoch{epoch:03d}_sample{saved}.png"
+                # 对比图: GT / Pred
+                from matplotlib import pyplot as plt
+                fig, axes = plt.subplots(1, 2, figsize=(12, 5),
+                                         subplot_kw={"projection": "3d"})
+                for ax, X, ttl in [(axes[0], g, "GT"), (axes[1], p, "Pred")]:
+                    for (j, k) in [(5, 7), (7, 9), (6, 8), (8, 10),
+                                   (5, 11), (6, 12), (11, 13), (13, 15),
+                                   (12, 14), (14, 16), (11, 12)]:
+                        if np.isnan(X[j]).any() or np.isnan(X[k]).any():
+                            continue
+                        ax.plot([X[j, 0], X[k, 0]], [X[j, 1], X[k, 1]],
+                                [X[j, 2], X[k, 2]], "o-", lw=2)
+                    lim = 2.0
+                    ax.set_xlim(-lim, lim); ax.set_ylim(-lim, lim); ax.set_zlim(-lim, lim)
+                    ax.set_title(ttl)
+                fig.suptitle(f"epoch {epoch} sample {i} (normalized units)")
+                fig.savefig(out, dpi=100)
+                plt.close(fig)
+                saved += 1
+            if saved >= max_save:
+                break
+    return saved
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--epochs", type=int, default=EPOCHS)
+    parser.add_argument("--resume", type=str, default=None)
+    parser.add_argument("--batch", type=int, default=BATCH_SIZE)
+    parser.add_argument("--workers", type=int, default=NUM_WORKERS)
+    parser.add_argument("--lr", type=float, default=LR)
+    args = parser.parse_args()
+
+    torch.manual_seed(SEED)
+    np.random.seed(SEED)
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"设备: {device}")
+
+    # 数据
+    train_ds = TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
+                                   subjects=TRAIN_SUBJECTS, rf=RECEPTIVE_FIELD)
+    val_ds = TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
+                                 subjects=VAL_SUBJECTS, rf=RECEPTIVE_FIELD, stride=5)
+    train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
+                              num_workers=args.workers, pin_memory=True, drop_last=True)
+    val_loader = DataLoader(val_ds, batch_size=args.batch, shuffle=False,
+                            num_workers=args.workers, pin_memory=True)
+
+    model = build_model().to(device)
+    opt = torch.optim.Adam(model.parameters(), lr=args.lr)
+    sched = torch.optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
+    joint_mask = torch.from_numpy(build_coco17_supervision_mask()).float().to(device)
+    writer = SummaryWriter(LOG_DIR)
+
+    start_epoch = 0
+    if args.resume:
+        ck = torch.load(args.resume, map_location=device)
+        model.load_state_dict(ck["model"])
+        opt.load_state_dict(ck["opt"])
+        start_epoch = ck["epoch"] + 1
+        print(f"恢复自 {args.resume} (epoch {ck['epoch']})")
+
+    print(f"训练样本: {len(train_ds)}, 验证样本: {len(val_ds)}")
+    print(f"每轮 batch: {len(train_loader)}")
+    best = float("inf")
+    for epoch in range(start_epoch, args.epochs):
+        model.train()
+        t0 = time.time()
+        tot, nb = 0.0, 0
+        for x, y in train_loader:
+            x, y = x.to(device), y.to(device)
+            opt.zero_grad()
+            pred = model(x)
+            loss = weighted_mpjpe_loss(pred, y, joint_mask)
+            loss.backward()
+            opt.step()
+            tot += loss.item()
+            nb += 1
+        sched.step()
+        train_loss = tot / nb
+
+        val_loss = evaluate(model, val_loader, device, joint_mask)
+        n_saved = save_val_samples(model, val_loader, device, epoch)
+        writer.add_scalar("train/mpjpe_norm", train_loss, epoch)
+        writer.add_scalar("val/mpjpe_norm", val_loss, epoch)
+        print(f"Epoch {epoch:3d} | train {train_loss:.4f} | val {val_loss:.4f} "
+              f"| 样本{'{'}{n_saved}{'}'} | {time.time()-t0:.0f}s", flush=True)
+
+        if val_loss < best:
+            best = val_loss
+            torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
+                        "epoch": epoch}, CKPT_DIR / "best.pth")
+        torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
+                    "epoch": epoch}, CKPT_DIR / f"epoch_{epoch:03d}.pth")
+
+    print(f"训练完成。最佳 val MPJPE(归一化): {best:.4f} -> best.pth")
+
+
+if __name__ == "__main__":
+    main()
