@@ -5,6 +5,8 @@ from __future__ import annotations
 from mmcv.transforms import BaseTransform
 from mmpose.registry import TRANSFORMS
 
+from .target_weights import scale_2d_only_target_weights
+
 
 @TRANSFORMS.register_module()
 class SetCausalTargetIndex(BaseTransform):
@@ -32,3 +34,14 @@ class SelectTransformedKeypoints(BaseTransform):
             results['transformed_keypoints'] = results[
                 'transformed_keypoints'][:, self.indices]
         return results
+
+
+@TRANSFORMS.register_module()
+class Scale2DOnlyTargetWeights(BaseTransform):
+    """Scale XY supervision for samples that have no metric depth labels."""
+
+    def __init__(self, weight: float = 0.25):
+        self.weight = weight
+
+    def transform(self, results: dict) -> dict:
+        return scale_2d_only_target_weights(results, self.weight)

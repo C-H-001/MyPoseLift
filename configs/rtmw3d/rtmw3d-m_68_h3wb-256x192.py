@@ -15,6 +15,8 @@ custom_imports = dict(
 
 num_keypoints = 68
 input_size = (192, 256, 288)  # width, height, depth
+auxiliary_sample_ratio = 0.05
+auxiliary_2d_loss_weight = 0.25
 # H3WB indices 0, 1, 2 are nose and the two eyes. Keep the original 65-point
 # layout and add three evenly spaced face landmarks: face-0 (23), face-34
 # (57), and face-67 (90).
@@ -105,12 +107,14 @@ train_pipeline = [
     *_base_.train_pipeline[:-2],
     *reduce_keypoints,
     dict(type='GenerateTarget', encoder=codec),
+    dict(type='Scale2DOnlyTargetWeights', weight=auxiliary_2d_loss_weight),
     dict(type='PackPoseInputs'),
 ]
 val_pipeline = [
     *_base_.val_pipeline[:-2],
     *reduce_keypoints,
     dict(type='GenerateTarget', encoder=codec),
+    dict(type='Scale2DOnlyTargetWeights', weight=auxiliary_2d_loss_weight),
     dict(type='PackPoseInputs'),
 ]
 # The inherited pipeline stores the L-model resolution literally in its
@@ -282,11 +286,13 @@ h3wb_train_dataset = dict(
 )
 train_datasets = [h3wb_train_dataset, *auxiliary_body_datasets]
 train_dataset = dict(
-    type='CombinedDataset',
+    type='RelativeRatioCombinedDataset',
     datasets=train_datasets,
-    # Keep auxiliary 2D data close to the H3WB sample count instead of letting
-    # the much larger COCO set drown out the 3D supervision.
-    sample_ratio_factor=[1.0] + [0.05] * len(auxiliary_body_datasets),
+    # Ratios are relative to the effective H3WB length.  Thus COCO is 5% of
+    # H3WB, rather than 5% of its own much larger raw length.
+    sample_ratio_factor=[1.0] + [auxiliary_sample_ratio] * len(
+        auxiliary_body_datasets),
+    reference_dataset=0,
     pipeline=train_pipeline,
     metainfo=dict(from_file='external/mmpose/configs/_base_/datasets/h3wb.py'),
     test_mode=False,

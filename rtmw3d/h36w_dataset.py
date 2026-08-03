@@ -7,6 +7,7 @@ from pathlib import Path
 import numpy as np
 from mmpose.datasets.datasets.body3d.h36m_dataset import Human36mDataset
 from mmpose.datasets.datasets.wholebody3d.h3wb_dataset import H36MWholeBodyDataset
+from mmpose.datasets.dataset_wrappers import CombinedDataset
 from mmpose.registry import DATASETS
 
 
@@ -64,3 +65,48 @@ class H36WWholeBodyDataset(H36MWholeBodyDataset):
             f'selected {len(selected)}/{len(filtered)} samples'
         )
         return selected, image_list
+
+
+@DATASETS.register_module()
+class RelativeRatioCombinedDataset(CombinedDataset):
+    """Combine datasets with ratios relative to one reference dataset.
+
+    MMPose's ``CombinedDataset.sample_ratio_factor`` scales each dataset by
+    its own raw length.  That makes ``0.05`` COCO samples much more frequent
+    than its name suggests when COCO is much larger than H3WB.  This wrapper
+    keeps the upstream indexing and resampling behavior but interprets each
+    ratio as a fraction of the selected reference dataset's effective length.
+    """
+
+    def __init__(
+        self,
+        datasets: list,
+        sample_ratio_factor: list[float] | None = None,
+        reference_dataset: int = 0,
+        **kwargs,
+    ):
+        super().__init__(
+            datasets=datasets,
+            sample_ratio_factor=None,
+            **kwargs,
+        )
+        if sample_ratio_factor is None:
+            return
+        if len(sample_ratio_factor) != len(self.datasets):
+            raise ValueError(
+                "sample_ratio_factor must match the number of datasets"
+            )
+        if not 0 <= reference_dataset < len(self.datasets):
+            raise ValueError(
+                f"reference_dataset out of range: {reference_dataset}"
+            )
+        if min(sample_ratio_factor) < 0:
+            raise ValueError("sample_ratio_factor cannot be negative")
+
+        self.resample = True
+        self._lens_ori = list(self._lens)
+        reference_len = self._lens_ori[reference_dataset]
+        self._lens = [
+            round(reference_len * ratio) for ratio in sample_ratio_factor
+        ]
+        self._len = sum(self._lens)
