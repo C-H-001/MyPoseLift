@@ -26,9 +26,9 @@ TRAIN_SUBJECTS = ["S1", "S5", "S6", "S7"]
 VAL_SUBJECTS = ["S5"]  # 开发验证 (正式评测用 S8 test npz)
 
 
-def build_model():
+def build_model(rf=81):
     return TemporalConvNet(num_input_channels=34, num_joints=17,
-                           receptive_field=RECEPTIVE_FIELD, causal=True,
+                           receptive_field=rf, causal=True,
                            num_layers=5, channels=1024)
 
 
@@ -88,7 +88,10 @@ def main():
     parser.add_argument("--lr", type=float, default=LR)
     parser.add_argument("--datasets", type=str, default="t3wb",
                         help="逗号分隔: t3wb,pw3d")
+    parser.add_argument("--rf", type=int, default=RECEPTIVE_FIELD,
+                        help="感受野 (窗口帧数)")
     args = parser.parse_args()
+    rf = args.rf
 
     torch.manual_seed(SEED)
     np.random.seed(SEED)
@@ -102,12 +105,12 @@ def main():
     for ds_name in datasets:
         if ds_name == "t3wb":
             train_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
-                                                 subjects=TRAIN_SUBJECTS, rf=RECEPTIVE_FIELD))
+                                                 subjects=TRAIN_SUBJECTS, rf=rf))
             val_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
-                                               subjects=VAL_SUBJECTS, rf=RECEPTIVE_FIELD, stride=5))
+                                               subjects=VAL_SUBJECTS, rf=rf, stride=5))
         elif ds_name == "pw3d":
             train_dss.append(TemporalPoseDataset(CACHE_DIR / "pw3d_train.npz",
-                                                 rf=RECEPTIVE_FIELD))
+                                                 rf=rf))
     train_ds = ConcatDataset(train_dss)
     val_ds = ConcatDataset(val_dss) if len(val_dss) > 1 else val_dss[0]
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
@@ -115,23 +118,24 @@ def main():
     val_loader = DataLoader(val_ds, batch_size=args.batch, shuffle=False,
                             num_workers=args.workers, pin_memory=True)
 
-    model = build_model().to(device)
+    model = build_model(rf).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
     joint_mask = torch.from_numpy(build_coco17_supervision_mask()).float().to(device)
     writer = SummaryWriter(LOG_DIR)
 
     start_epoch = 0
+    best = float("inf")
     if args.resume:
         ck = torch.load(args.resume, map_location=device)
         model.load_state_dict(ck["model"])
         opt.load_state_dict(ck["opt"])
         start_epoch = ck["epoch"] + 1
-        print(f"恢复自 {args.resume} (epoch {ck['epoch']})")
+        best = ck.get("val", float("inf"))
+        print(f"恢复自 {args.resume} (epoch {ck['epoch']}, best val {best:.4f})")
 
     print(f"训练样本: {len(train_ds)}, 验证样本: {len(val_ds)}")
     print(f"每轮 batch: {len(train_loader)}")
-    best = float("inf")
     for epoch in range(start_epoch, args.epochs):
         model.train()
         t0 = time.time()
@@ -158,9 +162,10 @@ def main():
         if val_loss < best:
             best = val_loss
             torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
-                        "epoch": epoch}, CKPT_DIR / "best.pth")
-        torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
-                    "epoch": epoch}, CKPT_DIR / f"epoch_{epoch:03d}.pth")
+                        "epoch": epoch, "val": val_loss}, CKPT_DIR / "best.pth")
+        if epoch % 10 == 0 or epoch == args.epochs - 1:
+            torch.save({"model": model.state_dict(), "opt": opt.state_dict(),
+                        "epoch": epoch}, CKPT_DIR / f"epoch_{epoch:03d}.pth")
 
     print(f"训练完成。最佳 val MPJPE(归一化): {best:.4f} -> best.pth")
 
