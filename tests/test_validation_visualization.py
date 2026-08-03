@@ -1,7 +1,11 @@
 import numpy as np
 import pytest
+from types import SimpleNamespace
 
-from rtmw3d.validation_visualization import compute_sample_metrics
+from rtmw3d.validation_visualization import (
+    _sample_from_data,
+    compute_sample_metrics,
+)
 
 
 def test_sample_metrics_are_zero_for_identical_pose():
@@ -24,3 +28,26 @@ def test_sample_metrics_respect_visibility_mask():
 
     assert metrics["mpjpe_mm"] == pytest.approx(100.0)
     assert metrics["valid_keypoints"] == 1
+
+
+def test_sample_uses_projected_prediction_for_2d_panel():
+    target = np.zeros((1, 3, 3), dtype=np.float32)
+    pred = np.ones((1, 3, 3), dtype=np.float32)
+    projected = np.full((1, 3, 2), 7.0, dtype=np.float32)
+    sample = SimpleNamespace(
+        gt_instances=SimpleNamespace(
+            lifting_target=target,
+            lifting_target_visible=np.ones((1, 3), dtype=np.float32),
+        ),
+        metainfo={},
+    )
+    output = SimpleNamespace(
+        pred_instances=SimpleNamespace(
+            keypoints=pred,
+            transformed_keypoints=projected,
+        )
+    )
+
+    result = _sample_from_data(sample, output, 0)
+
+    np.testing.assert_array_equal(result["keypoints_2d"], projected[0])

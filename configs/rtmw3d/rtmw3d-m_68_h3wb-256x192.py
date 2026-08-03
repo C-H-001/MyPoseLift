@@ -22,17 +22,24 @@ num_keypoints = 68
 input_size = (192, 256, 288)  # width, height, depth
 auxiliary_sample_ratio = 0.05
 auxiliary_2d_loss_weight = 0.25
-# H3WB indices 0, 1, 2 are nose and the two eyes. Keep the original 65-point
-# layout and add three evenly spaced face landmarks: face-0 (23), face-34
-# (57), and face-67 (90).
-keep_indices = list(range(23)) + [23, 57, 90] + list(range(91, 133))
+# H3WB indices 0, 1, 2 are nose and the two eyes. The 23-point body/foot
+# prefix already contains them; the explicit duplicate channels preserve the
+# requested 68-channel head while ensuring no other face landmark is trained.
+face_indices = [0, 1, 2]
+keep_indices = list(range(23)) + face_indices + list(range(91, 133))
 mapping = [(source, target) for target, source in enumerate(keep_indices)]
 
 # Kept for layout validation. BoneLoss is disabled below because its upstream
 # implementation matches batch-mean bone lengths rather than per-sample ones.
 full_parents = _base_.model['head']['loss'][1]['joint_parents']
-source_to_target = {source: target for target, source in enumerate(keep_indices)}
-joint_parents = [source_to_target[full_parents[source]] for source in keep_indices]
+source_to_target = {}
+for target, source in enumerate(keep_indices):
+    source_to_target.setdefault(source, target)
+joint_parents = [
+    target if 23 <= target < 23 + len(face_indices)
+    else source_to_target[full_parents[source]]
+    for target, source in enumerate(keep_indices)
+]
 
 codec = dict(
     type='SimCC3DLabel',

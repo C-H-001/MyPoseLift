@@ -114,7 +114,7 @@ def _draw_sample(
                 linewidth=1.0,
             )
     ax_2d.invert_yaxis()
-    ax_2d.set_title("2D validation input")
+    ax_2d.set_title("2D projected pose")
     ax_2d.set_aspect("equal", adjustable="datalim")
 
     _plot_skeleton(ax_gt, target, parents, "#2ca02c", "GT")
@@ -171,7 +171,10 @@ def _sample_from_data(data_sample: Any, output: Any, index: int) -> dict[str, An
     target = _first_instance(gt_instances.lifting_target, 2)
     pred = _first_instance(pred_instances.keypoints, 2)
     visible = getattr(gt_instances, "lifting_target_visible", None)
-    keypoints_2d = _first_instance(gt_instances.keypoints, 2)
+    # RTMW3D is an image-to-3D model. Validation samples carry the 3D target,
+    # but do not carry a separate GT 2D field. The estimator exposes the
+    # corresponding projected 2D prediction as ``transformed_keypoints``.
+    keypoints_2d = _first_instance(pred_instances.transformed_keypoints, 2)
     metrics = compute_sample_metrics(pred, target, visible)
     return {
         "index": index,
@@ -250,4 +253,3 @@ try:
 except ImportError:
     # The pure metric helpers remain usable in the lightweight test install.
     pass
-
