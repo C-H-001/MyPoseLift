@@ -10,6 +10,7 @@ $ErrorActionPreference = 'Stop'
 $watchLog = Join-Path $RepoRoot 'work_dirs\coco_mixed_download_watcher.log'
 $trainDir = Join-Path $RepoRoot 'work_dirs\rtmw3d-m_68_h3wb-coco-body-256x192_run03_accum4_02'
 $trainLog = Join-Path $trainDir 'automatic_train.log'
+$expectedTrainZipBytes = 19336861798
 
 function Write-Log([string]$Message) {
     $line = "$(Get-Date -Format s) $Message"
@@ -21,7 +22,17 @@ New-Item -ItemType Directory -Force -Path (Split-Path $watchLog) | Out-Null
 Write-Log "watching BITS job $BitsJobId"
 
 while ($true) {
-    $job = Get-BitsTransfer -JobId $BitsJobId -ErrorAction Stop
+    try {
+        $job = Get-BitsTransfer -JobId $BitsJobId -ErrorAction Stop
+    } catch {
+        $existingZip = Join-Path $CocoRoot 'train2017.zip'
+        if ((Test-Path -LiteralPath $existingZip) -and
+            ((Get-Item -LiteralPath $existingZip).Length -eq $expectedTrainZipBytes)) {
+            Write-Log 'BITS job is gone, but the complete train2017.zip is present'
+            break
+        }
+        throw
+    }
     $percent = if ($job.BytesTotal -gt 0) {
         [math]::Round(100 * $job.BytesTransferred / $job.BytesTotal, 2)
     } else { 0 }
@@ -30,6 +41,17 @@ while ($true) {
     if ($job.JobState -eq 'Transferred') {
         Complete-BitsTransfer -BitsJob $job
         break
+    }
+    if ($job.JobState -eq 'TransientError') {
+        $existingZip = Join-Path $CocoRoot 'train2017.zip'
+        if ((Test-Path -LiteralPath $existingZip) -and
+            ((Get-Item -LiteralPath $existingZip).Length -eq $expectedTrainZipBytes)) {
+            Write-Log 'transient BITS state ignored because train2017.zip is complete'
+            break
+        }
+        Write-Log "transient BITS error; retrying in 60 seconds: $($job.ErrorDescription)"
+        Start-Sleep -Seconds 60
+        continue
     }
     if ($job.JobState -in @('Error', 'Cancelled', 'AckNotNeeded')) {
         throw "COCO download failed with BITS state $($job.JobState): $($job.ErrorDescription)"
