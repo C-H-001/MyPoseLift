@@ -31,7 +31,7 @@ while ($true) {
         Complete-BitsTransfer -BitsJob $job
         break
     }
-    if ($job.JobState -in @('Error', 'TransientError', 'Cancelled', 'AckNotNeeded')) {
+    if ($job.JobState -in @('Error', 'Cancelled', 'AckNotNeeded')) {
         throw "COCO download failed with BITS state $($job.JobState): $($job.ErrorDescription)"
     }
     Start-Sleep -Seconds 60

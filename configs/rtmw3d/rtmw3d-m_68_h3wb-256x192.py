@@ -158,13 +158,15 @@ def _ready_dataset(name, dataset, required_paths):
     return None
 
 
-def _make_body_dataset(dataset_type, data_root, ann_file, image_dir, mapping):
+def _make_body_dataset(dataset_type, data_root, ann_file, image_dir, mapping,
+                       metainfo_file):
     return dict(
         type=dataset_type,
         data_root=data_root,
         data_mode='topdown',
         ann_file=ann_file,
         data_prefix=dict(img=image_dir),
+        metainfo=dict(from_file=metainfo_file),
         pipeline=[
             dict(
                 type='KeypointConverter',
@@ -186,6 +188,8 @@ dataset_coco_wholebody = dict(
     data_mode='topdown',
     ann_file=os.path.relpath(coco_wholebody_ann, coco_body_root),
     data_prefix=dict(img='train2017/'),
+    metainfo=dict(
+        from_file='external/mmpose/configs/_base_/datasets/coco_wholebody.py'),
     pipeline=[],
 )
 ready_coco_wholebody = _ready_dataset(
@@ -197,7 +201,8 @@ if ready_coco_wholebody is not None:
 dataset_coco_body = _make_body_dataset(
     'CocoDataset', coco_body_root,
     'annotations/person_keypoints_train2017.json', 'train2017/',
-    coco_body_to_coco133)
+    coco_body_to_coco133,
+    'external/mmpose/configs/_base_/datasets/coco.py')
 ready_coco_body = _ready_dataset(
     'COCO-Body', dataset_coco_body,
     [os.path.join(coco_body_root, 'annotations',
@@ -208,24 +213,30 @@ if ready_coco_body is not None:
 
 dataset_specs = [
     ('MPII', 'MpiiDataset', os.environ.get('MPII_ROOT', 'data'),
-     'mpii/annotations/mpii_train.json', 'pose/MPI/images/', mpii_coco133),
+     'mpii/annotations/mpii_train.json', 'pose/MPI/images/', mpii_coco133,
+     'external/mmpose/configs/_base_/datasets/mpii.py'),
     ('CrowdPose', 'CrowdPoseDataset', os.environ.get('CROWDPOSE_ROOT', 'data'),
      'crowdpose/annotations/mmpose_crowdpose_trainval.json',
-     'pose/CrowdPose/images/', crowdpose_coco133),
+     'pose/CrowdPose/images/', crowdpose_coco133,
+     'external/mmpose/configs/_base_/datasets/crowdpose.py'),
     ('PoseTrack18', 'PoseTrack18Dataset',
      os.environ.get('POSETRACK_ROOT', 'data'),
      'posetrack18/annotations/posetrack18_train.json',
-     'pose/PoseChallenge2018/', posetrack_coco133),
+     'pose/PoseChallenge2018/', posetrack_coco133,
+     'external/mmpose/configs/_base_/datasets/posetrack18.py'),
     ('AIC', 'AicDataset', os.environ.get('AIC_ROOT', 'data'),
      'aic/annotations/aic_train.json',
      'pose/ai_challenge/ai_challenger_keypoint_train_20170902/'
-     'keypoint_train_images_20170902/', aic_coco133),
+     'keypoint_train_images_20170902/', aic_coco133,
+     'external/mmpose/configs/_base_/datasets/aic.py'),
     ('JHMDB', 'JhmdbDataset', os.environ.get('JHMDB_ROOT', 'data'),
-     'jhmdb/annotations/Sub1_train.json', 'pose/JHMDB/', jhmdb_coco133),
+     'jhmdb/annotations/Sub1_train.json', 'pose/JHMDB/', jhmdb_coco133,
+     'external/mmpose/configs/_base_/datasets/jhmdb.py'),
 ]
-for name, dataset_type, data_root, ann_file, image_dir, source_mapping in dataset_specs:
+for name, dataset_type, data_root, ann_file, image_dir, source_mapping, metainfo_file in dataset_specs:
     dataset = _make_body_dataset(
-        dataset_type, data_root, ann_file, image_dir, source_mapping)
+        dataset_type, data_root, ann_file, image_dir, source_mapping,
+        metainfo_file)
     ready = _ready_dataset(
         name, dataset, [os.path.join(data_root, ann_file),
                         os.path.join(data_root, image_dir)])
@@ -257,7 +268,6 @@ param_scheduler = [
 ]
 train_cfg = dict(max_epochs=max_epochs, val_interval=1)
 h3wb_train_dataset = dict(
-    _delete_=True,
     type='H36WWholeBodyDataset',
     subjects=['S1', 'S5'],
     ann_file=h3wb_ann,
@@ -295,7 +305,6 @@ val_dataloader = dict(
     drop_last=False,
     sampler=dict(type='DefaultSampler', shuffle=False, round_up=False),
     dataset=dict(
-        _delete_=True,
         type='H36WWholeBodyDataset',
         subjects=['S7'],
         ann_file=h3wb_ann,
