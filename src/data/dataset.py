@@ -58,7 +58,9 @@ class TemporalPoseDataset(Dataset):
         """stride_aug: 窗口内步长增强 (时间尺度鲁棒)。None 则禁用。
         stride: 窗口间步长 (控制样本量)。
         """
-        data = np.load(npz_path, allow_pickle=True)["data"].item()
+        _npz = np.load(npz_path, allow_pickle=True)
+        data = _npz["data"].item()
+        self.supervision_mask = np.asarray(_npz["supervision_mask"], dtype=bool)  # (17,)
         self.rf = rf
         self.samples = []      # (subject, action, camera, center_idx, window, stride_in)
         self.cache = {}        # (subject, action, camera) -> item
@@ -84,6 +86,10 @@ class TemporalPoseDataset(Dataset):
         pose2d = item["pose2d_coco17"][w]     # (rf,17,2) 像素
         cam3d = item["cam3d_coco17"][center]  # (17,3) 相机系 mm
 
+        # per-sample 监督 mask: 全局监督关节 & 该帧有效关节 (无 NaN)
+        valid = ~np.isnan(cam3d).any(axis=-1)  # (17,)
+        mask = self.supervision_mask & valid    # (17,) bool
+
         # ---- 2D: 缺失填 root, 像素 -> [-1,1] (保留位置/距离信息, 对齐 VideoPose3D) ----
         # VideoPose3D: normalize_screen_coordinates, 不做 root 相对 / 尺度缩放
         p2d, _ = _fill_missing_with_root(np.asarray(pose2d, dtype=np.float64))
@@ -96,4 +102,5 @@ class TemporalPoseDataset(Dataset):
 
         x = torch.from_numpy(normed2d.reshape(self.rf, 34)).float()
         y = torch.from_numpy(centered3d.reshape(17, 3)).float()
-        return x, y
+        m = torch.from_numpy(mask.astype(np.float32)).float()
+        return x, y, m

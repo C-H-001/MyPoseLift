@@ -24,9 +24,10 @@ def test_dataset_len_and_shapes():
     ds = TemporalPoseDataset("data/cache/t3wb_train.npz",
                              subjects=["S5"], rf=81, stride=10)
     assert len(ds) > 100
-    x, y = ds[0]
+    x, y, m = ds[0]
     assert x.shape == (81, 34)
     assert y.shape == (17, 3)
+    assert m.shape == (17,)
     assert isinstance(x, torch.Tensor)
     assert x.dtype == torch.float32
 
@@ -34,7 +35,7 @@ def test_dataset_len_and_shapes():
 def test_dataset_values_reasonable():
     ds = TemporalPoseDataset("data/cache/t3wb_train.npz",
                              subjects=["S5"], rf=81, stride=50)
-    x, y = ds[0]
+    x, y, m = ds[0]
     xn = x.numpy()
     # 2D: 像素 -> [-1,1] (对齐 VideoPose3D)
     assert np.abs(xn).max() <= 1.0 + 1e-3, f"2D 输入异常: max={np.abs(xn).max():.2f}"
@@ -44,6 +45,9 @@ def test_dataset_values_reasonable():
     # 2D 首帧和末帧都不应为全零
     assert np.abs(xn[0]).sum() > 0
     assert np.abs(xn[-1]).sum() > 0
+    # per-sample mask: 12 监督关节 (H36M 无 eyes/ears/nose)
+    assert int(m.sum()) == 12
+    assert m[0] == 0 and m[5] == 1  # nose 不监督, l_shoulder 监督
 
 
 def test_dataset_all_subjects():

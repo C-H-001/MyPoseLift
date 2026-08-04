@@ -29,7 +29,8 @@ def eval_npz(model, npz_path, device, joint_mask, batch=512, verbose=False):
                         num_workers=NUM_WORKERS, pin_memory=True)
     errs = []
     with torch.no_grad():
-        for x, y in loader:
+        for batch in loader:
+            x, y = batch[0], batch[1]
             x, y = x.to(device), y.to(device)
             pred = model(x)
             d = torch.norm(pred - y, dim=-1)  # (B,17)

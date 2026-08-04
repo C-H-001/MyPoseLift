@@ -32,14 +32,15 @@ def build_model(rf=81):
                            num_layers=5, channels=1024)
 
 
-def evaluate(model, loader, device, joint_mask):
+def evaluate(model, loader, device):
     model.eval()
     losses = []
     with torch.no_grad():
-        for x, y in loader:
-            x, y = x.to(device), y.to(device)
+        for batch in loader:
+            x, y, m = batch[0], batch[1], batch[2]
+            x, y, m = x.to(device), y.to(device), m.to(device)
             pred = model(x)
-            losses.append(weighted_mpjpe_loss(pred, y, joint_mask).item())
+            losses.append(weighted_mpjpe_loss(pred, y, m).item())
     return float(np.mean(losses)) if losses else float("inf")
 
 
@@ -48,7 +49,8 @@ def save_val_samples(model, loader, device, epoch, max_save=5):
     model.eval()
     saved = 0
     with torch.no_grad():
-        for x, y in loader:
+        for batch in loader:
+            x, y = batch[0], batch[1]
             x, y = x.to(device), y.to(device)
             pred = model(x)
             for i in range(min(max_save - saved, x.size(0))):
@@ -90,6 +92,8 @@ def main():
                         help="逗号分隔: t3wb,pw3d")
     parser.add_argument("--rf", type=int, default=RECEPTIVE_FIELD,
                         help="感受野 (窗口帧数)")
+    parser.add_argument("--pw3d-weight", type=float, default=8.0,
+                        help="3DPW 采样权重 (平衡小数据集), 默认 8 (约 1:2 比例)")
     args = parser.parse_args()
     rf = args.rf
 
@@ -98,23 +102,24 @@ def main():
     device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"设备: {device}")
 
-    # 数据 (支持多数据集混合)
-    from torch.utils.data import ConcatDataset
+    # 数据 (支持多数据集混合 + 平衡采样)
+    from torch.utils.data import ConcatDataset, WeightedRandomSampler
     datasets = args.datasets.split(",")
-    train_dss, val_dss = [], []
+    train_dss, val_dss, ds_weights = [], [], []
     for ds_name in datasets:
         if ds_name == "t3wb":
-            train_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
-                                                 subjects=TRAIN_SUBJECTS, rf=rf))
+            d = TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
+                                    subjects=TRAIN_SUBJECTS, rf=rf)
+            train_dss.append(d); ds_weights.append(1.0)
             val_dss.append(TemporalPoseDataset(CACHE_DIR / "t3wb_train.npz",
                                                subjects=VAL_SUBJECTS, rf=rf, stride=5))
         elif ds_name == "pw3d":
-            train_dss.append(TemporalPoseDataset(CACHE_DIR / "pw3d_train.npz",
-                                                 rf=rf))
+            d = TemporalPoseDataset(CACHE_DIR / "pw3d_train.npz", rf=rf)
+            train_dss.append(d); ds_weights.append(args.pw3d_weight)
         elif ds_name == "h36m":
             # H36M 官方 10fps 全量: 训练 S1,S5,S6,S7,S8, 验证 S9,S11 (标准协议)
-            train_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_train.npz",
-                                                 rf=rf))
+            d = TemporalPoseDataset(CACHE_DIR / "h36m_train.npz", rf=rf)
+            train_dss.append(d); ds_weights.append(1.0)
             val_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_valid.npz",
                                                rf=rf, stride=10))
     train_ds = ConcatDataset(train_dss)
@@ -124,7 +129,14 @@ def main():
         val_ds = val_dss[0]
     else:
         val_ds = ConcatDataset(val_dss)
-    train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
+
+    # 平衡采样: 每个样本权重 = ds_weight / len(ds) (3DPW 等小数据集上采样)
+    sample_weights = []
+    for d, w in zip(train_dss, ds_weights):
+        sample_weights.extend([w / len(d)] * len(d))
+    train_sampler = WeightedRandomSampler(sample_weights, num_samples=len(sample_weights),
+                                          replacement=True)
+    train_loader = DataLoader(train_ds, batch_size=args.batch, sampler=train_sampler,
                               num_workers=args.workers, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch, shuffle=False,
                             num_workers=args.workers, pin_memory=True)
@@ -132,7 +144,6 @@ def main():
     model = build_model(rf).to(device)
     opt = torch.optim.Adam(model.parameters(), lr=args.lr)
     sched = torch.optim.lr_scheduler.StepLR(opt, step_size=15, gamma=0.5)
-    joint_mask = torch.from_numpy(build_coco17_supervision_mask()).float().to(device)
     writer = SummaryWriter(LOG_DIR)
 
     start_epoch = 0
@@ -151,11 +162,12 @@ def main():
         model.train()
         t0 = time.time()
         tot, nb = 0.0, 0
-        for x, y in train_loader:
-            x, y = x.to(device), y.to(device)
+        for batch in train_loader:
+            x, y, m = batch[0], batch[1], batch[2]
+            x, y, m = x.to(device), y.to(device), m.to(device)
             opt.zero_grad()
             pred = model(x)
-            loss = weighted_mpjpe_loss(pred, y, joint_mask)
+            loss = weighted_mpjpe_loss(pred, y, m)
             loss.backward()
             opt.step()
             tot += loss.item()
@@ -163,7 +175,7 @@ def main():
         sched.step()
         train_loss = tot / nb
 
-        val_loss = evaluate(model, val_loader, device, joint_mask)
+        val_loss = evaluate(model, val_loader, device)
         n_saved = save_val_samples(model, val_loader, device, epoch)
         writer.add_scalar("train/mpjpe_norm", train_loss, epoch)
         writer.add_scalar("val/mpjpe_norm", val_loss, epoch)
