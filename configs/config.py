@@ -34,7 +34,7 @@ L_HIP, R_HIP = 11, 12
 L_SHOULDER, R_SHOULDER = 5, 6
 
 # ---------- 模型 ----------
-RECEPTIVE_FIELD = 9       # 输入帧数 (因果, rf9/rf27 最优 ~260mm vs rf81 288mm)
+RECEPTIVE_FIELD = 27      # 输入帧数 (因果, H36M 全量数据实验确认 27 帧最优: val 46mm)
 CHANNELS = 1024           # TCN 通道数
 NUM_LAYERS = 5            # 残差块数
 KERNEL_SIZE = 3
