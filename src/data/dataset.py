@@ -84,20 +84,15 @@ class TemporalPoseDataset(Dataset):
         pose2d = item["pose2d_coco17"][w]     # (rf,17,2) 像素
         cam3d = item["cam3d_coco17"][center]  # (17,3) 相机系 mm
 
-        # ---- 2D: 缺失填 root, pelvis 相对, torso 缩放 ----
+        # ---- 2D: 缺失填 root, 像素 -> [-1,1] (保留位置/距离信息, 对齐 VideoPose3D) ----
+        # VideoPose3D: normalize_screen_coordinates, 不做 root 相对 / 尺度缩放
         p2d, _ = _fill_missing_with_root(np.asarray(pose2d, dtype=np.float64))
-        centered2d, _ = center_at_root(p2d)
-        # scale 下限保护
-        raw_scale = np.linalg.norm(centered2d[:, 5, :] - centered2d[:, 11, :], axis=-1)
-        safe_scale = np.where(raw_scale < MIN_SCALE_PX, np.median(raw_scale), raw_scale)
-        safe_scale = np.where(safe_scale < 1e-6, 1.0, safe_scale)
-        normed2d = centered2d / safe_scale[:, None, None]
+        normed2d = p2d / np.array([1000.0, 1000.0]) * 2.0 - 1.0  # -> [-1,1]
 
-        # ---- 3D: 缺失填 root, pelvis 相对, 用当前帧 2D 尺度 ----
+        # ---- 3D: 缺失填 root, root 相对 (mm), 不缩放 (对齐 VideoPose3D) ----
         c3d, _ = _fill_missing_with_root(np.asarray(cam3d, dtype=np.float64))
-        centered3d, _ = center_at_root(c3d)
-        normed3d = centered3d / safe_scale[-1]
+        centered3d, _ = center_at_root(c3d)  # mm, root 相对
 
         x = torch.from_numpy(normed2d.reshape(self.rf, 34)).float()
-        y = torch.from_numpy(normed3d.reshape(17, 3)).float()
+        y = torch.from_numpy(centered3d.reshape(17, 3)).float()
         return x, y

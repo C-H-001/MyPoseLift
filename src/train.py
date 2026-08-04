@@ -111,8 +111,19 @@ def main():
         elif ds_name == "pw3d":
             train_dss.append(TemporalPoseDataset(CACHE_DIR / "pw3d_train.npz",
                                                  rf=rf))
+        elif ds_name == "h36m":
+            # H36M 官方 10fps 全量: 训练 S1,S5,S6,S7,S8, 验证 S9,S11 (标准协议)
+            train_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_train.npz",
+                                                 rf=rf))
+            val_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_valid.npz",
+                                               rf=rf, stride=10))
     train_ds = ConcatDataset(train_dss)
-    val_ds = ConcatDataset(val_dss) if len(val_dss) > 1 else val_dss[0]
+    if len(val_dss) == 0:
+        val_ds = train_dss[0]  # 无验证集时退化
+    elif len(val_dss) == 1:
+        val_ds = val_dss[0]
+    else:
+        val_ds = ConcatDataset(val_dss)
     train_loader = DataLoader(train_ds, batch_size=args.batch, shuffle=True,
                               num_workers=args.workers, pin_memory=True, drop_last=True)
     val_loader = DataLoader(val_ds, batch_size=args.batch, shuffle=False,

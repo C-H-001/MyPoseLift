@@ -36,11 +36,11 @@ def test_dataset_values_reasonable():
                              subjects=["S5"], rf=81, stride=50)
     x, y = ds[0]
     xn = x.numpy()
-    # 归一化后 2D 应在合理范围 ([-5,5])
-    assert np.abs(xn).max() < 10, f"2D 输入异常: max={np.abs(xn).max():.2f}"
-    # 3D 归一化后 torso=1, 数值范围合理
+    # 2D: 像素 -> [-1,1] (对齐 VideoPose3D)
+    assert np.abs(xn).max() <= 1.0 + 1e-3, f"2D 输入异常: max={np.abs(xn).max():.2f}"
+    # 3D: root 相对 mm, 范围合理 (< 2000mm)
     yn = y.numpy()
-    assert np.abs(yn).max() < 10, f"3D 输出异常: max={np.abs(yn).max():.2f}"
+    assert np.abs(yn).max() < 2000, f"3D 输出异常: max={np.abs(yn).max():.2f}"
     # 2D 首帧和末帧都不应为全零
     assert np.abs(xn[0]).sum() > 0
     assert np.abs(xn[-1]).sum() > 0
