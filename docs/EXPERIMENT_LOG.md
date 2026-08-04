@@ -246,6 +246,29 @@ centered3d = centered3d / 1000.0   # 输出范围 ~±0.8, BN 易学
 
 ---
 
+## 7.5 A 方案: 多数据集联合训练实验 (H36M + 3DPW)
+
+**实现** (已提交, 49/49 测试通过):
+- per-sample visible mask: dataset 返回 (x, y, mask), 各数据集监督关节可不同
+- loss 支持 (B,J) per-sample mask (有效关节项平均)
+- 平衡采样: WeightedRandomSampler + --pw3d-weight 参数
+- 多数据集 ConcatDataset 联合
+
+**结果** (rf=27, 联合训练 30 epoch vs 纯 H36M 149 epoch):
+
+| 模型 | H36M S9/S11 val | 3DPW test (in-the-wild) |
+|------|----------------|------------------------|
+| 纯 H36M (epoch_149) | **46mm** | 226.2mm |
+| H36M+3DPW 联合 | 54mm (下降) | 227.6mm (无提升) |
+
+**结论**: 3DPW 混合训练收益为负。原因:
+1. 3DPW 仅 24 序列/17k 帧, 上采样后占比仍 <6%, 影响有限
+2. 室外移动相机 vs H36M 室内固定相机, 分布差异大, "两头不讨好"
+3. 3DPW 2D 由 3D 投影生成, 与 H36M 2D 标注分布不一致
+
+**经验**: 联合训练需选与主数据集分布接近的补充数据 (如 MPI-INF-3DHP),
+或采用半监督 (COCO 2D 投影约束, 方案 B) 避免 3D 分布冲突。
+
 ## 8. 最终结果
 
 | 指标 | 结果 |
