@@ -89,9 +89,10 @@ class TemporalPoseDataset(Dataset):
         p2d, _ = _fill_missing_with_root(np.asarray(pose2d, dtype=np.float64))
         normed2d = p2d / np.array([1000.0, 1000.0]) * 2.0 - 1.0  # -> [-1,1]
 
-        # ---- 3D: 缺失填 root, root 相对 (mm), 不缩放 (对齐 VideoPose3D) ----
+        # ---- 3D: 缺失填 root, root 相对, 毫米 -> 米 (对齐 VideoPose3D, 输出尺度易学) ----
         c3d, _ = _fill_missing_with_root(np.asarray(cam3d, dtype=np.float64))
         centered3d, _ = center_at_root(c3d)  # mm, root 相对
+        centered3d = centered3d / 1000.0     # mm -> 米 (输出范围 ~±0.8, BN 易学)
 
         x = torch.from_numpy(normed2d.reshape(self.rf, 34)).float()
         y = torch.from_numpy(centered3d.reshape(17, 3)).float()
