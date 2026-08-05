@@ -54,13 +54,15 @@ def _fill_missing_with_root(pts):
 
 class TemporalPoseDataset(Dataset):
     def __init__(self, npz_path, subjects=None, rf=81, stride=1,
-                 stride_aug=(1, 2, 3)):
+                 stride_aug=(1, 2, 3), root_idx=None):
         """stride_aug: 窗口内步长增强 (时间尺度鲁棒)。None 则禁用。
         stride: 窗口间步长 (控制样本量)。
+        root_idx: 根关节索引 (None=COCO l/r_hip 11/12 中点; 0=H36M Hip)
         """
         _npz = np.load(npz_path, allow_pickle=True)
         data = _npz["data"].item()
         self.supervision_mask = np.asarray(_npz["supervision_mask"], dtype=bool)  # (17,)
+        self.root_idx = root_idx
         self.rf = rf
         self.samples = []      # (subject, action, camera, center_idx, window, stride_in)
         self.cache = {}        # (subject, action, camera) -> item
@@ -97,7 +99,7 @@ class TemporalPoseDataset(Dataset):
 
         # ---- 3D: 缺失填 root, root 相对, 毫米 -> 米 (对齐 VideoPose3D, 输出尺度易学) ----
         c3d, _ = _fill_missing_with_root(np.asarray(cam3d, dtype=np.float64))
-        centered3d, _ = center_at_root(c3d)  # mm, root 相对
+        centered3d, _ = center_at_root(c3d, root_idx=self.root_idx)  # mm, root 相对
         centered3d = centered3d / 1000.0     # mm -> 米 (输出范围 ~±0.8, BN 易学)
 
         x = torch.from_numpy(normed2d.reshape(self.rf, 34)).float()
