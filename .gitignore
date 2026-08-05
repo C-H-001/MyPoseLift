@@ -7,3 +7,4 @@ data/cache/
 weights/
 work_dirs/
 data/cache/*.npz
+videos_sample/
