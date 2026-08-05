@@ -5,3 +5,5 @@ data/cache/
 .worktrees/
 *.log
 weights/
+work_dirs/
+data/cache/*.npz

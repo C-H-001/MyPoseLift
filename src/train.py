@@ -122,6 +122,12 @@ def main():
             train_dss.append(d); ds_weights.append(1.0)
             val_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_valid.npz",
                                                rf=rf, stride=10))
+        elif ds_name == "h36m_h17":
+            # H36M 17 点原序 (全 17 点监督, 与 H36M 2D 检测器一致)
+            d = TemporalPoseDataset(CACHE_DIR / "h36m_train_h17.npz", rf=rf)
+            train_dss.append(d); ds_weights.append(1.0)
+            val_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_valid_h17.npz",
+                                               rf=rf, stride=10))
     train_ds = ConcatDataset(train_dss)
     if len(val_dss) == 0:
         val_ds = train_dss[0]  # 无验证集时退化
