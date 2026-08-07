@@ -94,6 +94,8 @@ def main():
                         help="感受野 (窗口帧数)")
     parser.add_argument("--pw3d-weight", type=float, default=8.0,
                         help="3DPW 采样权重 (平衡小数据集), 默认 8 (约 1:2 比例)")
+    parser.add_argument("--augment", action="store_true",
+                        help="启用时序数据增强 (3D->投影2D+噪声+dropout)")
     args = parser.parse_args()
     rf = args.rf
 
@@ -125,7 +127,15 @@ def main():
         elif ds_name == "h36m_h17":
             # H36M 17 点原序 (全 17 点监督, 与 H36M 2D 检测器一致)
             # root_idx=0: H36M 关节 0 (Hip) 作为根 (VideoPose3D 协议)
-            d = TemporalPoseDataset(CACHE_DIR / "h36m_train_h17.npz", rf=rf, root_idx=0)
+            if args.augment:
+                from src.data.aug_dataset import AugmentedPoseDataset
+                from src.augmentation.sequence_augmentation import ResidualBank
+                bank = ResidualBank.from_array(
+                    np.load(CACHE_DIR / "residual_bank.npy"))
+                d = AugmentedPoseDataset(CACHE_DIR / "h36m_train_h17.npz", rf=rf,
+                                         residual_bank=bank)
+            else:
+                d = TemporalPoseDataset(CACHE_DIR / "h36m_train_h17.npz", rf=rf, root_idx=0)
             train_dss.append(d); ds_weights.append(1.0)
             val_dss.append(TemporalPoseDataset(CACHE_DIR / "h36m_valid_h17.npz",
                                                rf=rf, stride=10, root_idx=0))
