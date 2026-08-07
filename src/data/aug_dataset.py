@@ -63,11 +63,21 @@ class AugmentedPoseDataset(Dataset):
     def __getitem__(self, idx):
         subj, act, ck, center, w, _ = self.samples[idx]
         item = self.cache[(subj, act, ck)]
-        cam3d = item["cam3d_coco17"][w]  # (rf,17,3) mm (H36M 17 原序)
+        cam3d = item["cam3d_coco17"][w]  # (rf,17,3) mm 绝对相机系
+
+        # 关键: 增强器期望 root 相对 3D (camera_distance 加在相对 z 上给出真实深度)
+        # H36M 3D 是绝对相机系 (z~4500mm), 需先减目标帧 root -> 相对深度
+        # 因果目标帧 = 窗口末帧 (index = rf-1)
+        target_local = len(w) - 1
+        root = cam3d[target_local, self.config.root_index]
+        cam3d_rel = cam3d - root  # (rf,17,3) root 相对 mm
 
         # 3D 增强 (clip 级旋转/缩放 + 投影 + 噪声 + dropout)
+        # center_frame = 窗口末帧 (因果目标), 保持与 root 一致
+        from dataclasses import replace
+        cfg = replace(self.config, center_frame=target_local)
         sample = augment_sequence(
-            cam3d, self.camera, config=self.config,
+            cam3d_rel, self.camera, config=cfg,
             residual_bank=self.bank, rng=self.rng)
 
         x = sample.keypoints_2d.reshape(self.rf, 34).astype(np.float32)  # [-1,1]
